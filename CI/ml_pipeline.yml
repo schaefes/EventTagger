@@ -1,5 +1,4 @@
 include:
-    - CI/cmssw.yml
     - template: Code-Quality.gitlab-ci.yml
 
 stages:
@@ -102,80 +101,6 @@ evaluate:
     exclude:
       - .npy
     expire_in: 7 days
-
-# upload_new_model:
-#   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
-#   stage: upload
-#   tags: [k8s-gpu]
-#   variables:
-#     KUBERNETES_MEMORY_REQUEST: 4Gi
-#     KUBERNETES_CPU_REQUEST: 1
-#   rules:
-#     - if: $RERUN_ON_TAG == "False"
-#   needs:
-#     - job: train
-#       optional: false
-#     - job: evaluate
-#       optional: false
-#     - job: emulation-evaluate
-#       optional: true
-#     - job: emulate
-#       optional: true
-#     - job: hls4ml
-#       optional: true
-#     - job: profile
-#       optional: true
-#   before_script:
-#     - export PYTHONPATH=/builds/ml_l1/EventTagger:$PYTHONPATH
-#     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
-#   script:
-#     - ./CI/upload_new_model.sh
-#   artifacts:
-#     paths:
-#       - $Name
-#     expire_in: 1 day
-
-
-# upload_tagged_model:
-#   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
-#   stage: upload
-#   tags: [k8s-gpu]
-#   variables:
-#     KUBERNETES_MEMORY_REQUEST: 4Gi
-#     KUBERNETES_CPU_REQUEST: 1
-#   needs: [emulation-evaluate,hls4ml,train,evaluate,profile]
-#   dependencies: [emulation-evaluate,hls4ml,train,evaluate,profile]
-#   rules:
-#     - if: $RERUN_ON_TAG == "True"
-#   before_script:
-#     - export PYTHONPATH=/builds/ml_l1/EventTagger:$PYTHONPATH
-#     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
-#   script:
-#     - source activate tagger
-#     - mkdir -p ${EOS_STORAGE_DIR}/tags/${TAG}/test/firmware
-#     - mkdir -p ${EOS_STORAGE_DIR}/tags/${TAG}/test/plots
-#     - mkdir $Name
-#     - cd tagger/firmware
-#     - tar -cvf L1TSC4NGEventModel.tgz L1TSC4NGEventModel
-#     - cp -r L1TSC4NGEventModel.tgz ${EOS_STORAGE_DIR}/tags/${TAG}/test/firmware/
-#     - cd ../..
-#     - mkdir $Name/plots
-#     - mv output/$Model/plots/emulation $Name/plots
-#     - mv output/$Model/plots/profile $Name/plots
-#     - mv output/$Model/plots/training/ $Name/plots
-#     - mv output/$Model/plots/physics/ $Name/plots
-#     - cd ..
-#     - rm -rf php-plots
-#     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cebrown/php-plots -b feature/update_extension_grouping
-#     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
-#     - pb_copy_index.py EventTagger/${Name} --recursive
-#     # - pb_copy_index.py ${EOS_STORAGE_DIR}/tags/${TAG}/test --recursive
-#     - cd EventTagger/${Name}
-#     - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/tags/${TAG}/test/plots --recursive --extensions png,pdf
-#   artifacts:
-#     paths:
-#       - $Name
-#     expire_in: 1 day
 
 code_quality:
    tags:
