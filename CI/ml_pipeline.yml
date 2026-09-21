@@ -53,102 +53,102 @@ data:
     matrix:
       - PROCESS: ["MinBias", "VBFHToBB", "VBFHToTauTau", "VBFHToCC", "GGFHHTo4B", "GGFHHTo2B2Tau"]
 
-train:
-  extends:
-    - .template
-  stage: train
-  needs:
-    - job : data
-      optional: true
-script:
-  - source activate eventtagger
-  - mkdir -p data
-  - |
-      IFS=',' read -ra PROCS <<< "$Train_processes"
+# train:
+#   extends:
+#     - .template
+#   stage: train
+#   needs:
+#     - job : data
+#       optional: true
+# script:
+#   - source activate eventtagger
+#   - mkdir -p data
+#   - |
+#       IFS=',' read -ra PROCS <<< "$Train_processes"
 
-      for PROC in "${PROCS[@]}"; do
-        echo "Fetching ${PROC}..."
-        eos cp "${EOS_STORAGE_DIR}/${PROC}/training_data.tgz" .
-        mkdir -p "data/${PROC}"
-        tar -xf training_data.tgz -C "data/${PROC}"
-        rm training_data.tgz
-      done
+#       for PROC in "${PROCS[@]}"; do
+#         echo "Fetching ${PROC}..."
+#         eos cp "${EOS_STORAGE_DIR}/${PROC}/training_data.tgz" .
+#         mkdir -p "data/${PROC}"
+#         tar -xf training_data.tgz -C "data/${PROC}"
+#         rm training_data.tgz
+#       done
 
-      # Sort processes so the order in Train_processes does not matter
-      IFS=$'\n' SORTED_PROCS=($(printf '%s\n' "${PROCS[@]}" | sort))
+#       # Sort processes so the order in Train_processes does not matter
+#       IFS=$'\n' SORTED_PROCS=($(printf '%s\n' "${PROCS[@]}" | sort))
 
-      PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
+#       PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
 
-      MODEL_SUBDIR="${EOS_MODEL_DIR}/${Name}/${PROCESS_SUFFIX}"
+#       MODEL_SUBDIR="${EOS_MODEL_DIR}/${Name}/${PROCESS_SUFFIX}"
 
-      echo "Saving model to: ${MODEL_SUBDIR}"
+#       echo "Saving model to: ${MODEL_SUBDIR}"
 
-      python tagger/train/train.py --train --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
-      python tagger/train/train.py --evaluate --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
+#       python tagger/train/train.py --train --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
+#       python tagger/train/train.py --evaluate --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
 
-      cd "output/${Model}/${PROCESS_SUFFIX}"
+#       cd "output/${Model}/${PROCESS_SUFFIX}"
 
-      eos mkdir -p "${MODEL_SUBDIR}"
-      eos cp -r * "${MODEL_SUBDIR}"
+#       eos mkdir -p "${MODEL_SUBDIR}"
+#       eos cp -r * "${MODEL_SUBDIR}"
 
-      export MODEL_LOCATION="${MODEL_SUBDIR}"
-  artifacts:
-    paths:
-      - output
-    exclude:
-      - .npy
-    expire_in: 1 day
+#       export MODEL_LOCATION="${MODEL_SUBDIR}"
+#   artifacts:
+#     paths:
+#       - output
+#     exclude:
+#       - .npy
+#     expire_in: 1 day
 
-evaluate:
-  extends:
-    - .template
-  stage: evaluate
-  tags: [cern-nextgen-h100]
-  script:
-  - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
-  - tar -xf training_data_$Inputs.tgz
-  - source activate tagger
-  - mkdir data
-  - cd data
-  - eos cp $EOS_DATA_DIR/$MINBIAS .
-  - eos cp $BBBB_EOS_DIR/$BBBB .
-  - eos cp $BBTT_EOS_DIR/$BBTT .
-  - eos cp $EOS_DATA_DIR/$VBFHTAUTAU .
-  - cd ..
-  artifacts:
-    paths:
-      - output
-    when: always
-    exclude:
-      - .npy
-    expire_in: 7 days
+# evaluate:
+#   extends:
+#     - .template
+#   stage: evaluate
+#   tags: [cern-nextgen-h100]
+#   script:
+#   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
+#   - tar -xf training_data_$Inputs.tgz
+#   - source activate tagger
+#   - mkdir data
+#   - cd data
+#   - eos cp $EOS_DATA_DIR/$MINBIAS .
+#   - eos cp $BBBB_EOS_DIR/$BBBB .
+#   - eos cp $BBTT_EOS_DIR/$BBTT .
+#   - eos cp $EOS_DATA_DIR/$VBFHTAUTAU .
+#   - cd ..
+#   artifacts:
+#     paths:
+#       - output
+#     when: always
+#     exclude:
+#       - .npy
+#     expire_in: 7 days
 
-code_quality:
-   tags:
-    - docker-privileged-xl
-   artifacts:
-    reports:
-      codequality: gl-code-quality-report.json
+# code_quality:
+#    tags:
+#     - docker-privileged-xl
+#    artifacts:
+#     reports:
+#       codequality: gl-code-quality-report.json
 
-pylint:
-  stage: test
-  image: python:3.7-slim
-  before_script:
-    - mkdir -p public/badges public/lint
-    - echo undefined > public/badges/$CI_JOB_NAME.score
-    - pip install pylint-gitlab
-  script:
-    - pylint --exit-zero --output-format=text $(find -type f -name "*.py" ! -path "**/.venv/**") | tee /tmp/pylint.txt
-    - sed -n 's/^Your code has been rated at \([-0-9.]*\)\/.*/\1/p' /tmp/pylint.txt > public/badges/$CI_JOB_NAME.score
-    - pylint --exit-zero --output-format=pylint_gitlab.GitlabCodeClimateReporter $(find -type f -name "*.py" ! -path "**/.venv/**") > codeclimate.json
-    - pylint --exit-zero --output-format=pylint_gitlab.GitlabPagesHtmlReporter $(find -type f -name "*.py" ! -path "**/.venv/**") > public/lint/index.html
-  after_script:
-    - anybadge --overwrite --label $CI_JOB_NAME --value=$(cat public/badges/$CI_JOB_NAME.score) --file=public/badges/$CI_JOB_NAME.svg 4=red 6=orange 8=yellow 10=green
-    - |
-      echo "Your score is: $(cat public/badges/$CI_JOB_NAME.score)"
-  artifacts:
-    paths:
-      - public
-    reports:
-      codequality: codeclimate.json
-    when: always
+# pylint:
+#   stage: test
+#   image: python:3.7-slim
+#   before_script:
+#     - mkdir -p public/badges public/lint
+#     - echo undefined > public/badges/$CI_JOB_NAME.score
+#     - pip install pylint-gitlab
+#   script:
+#     - pylint --exit-zero --output-format=text $(find -type f -name "*.py" ! -path "**/.venv/**") | tee /tmp/pylint.txt
+#     - sed -n 's/^Your code has been rated at \([-0-9.]*\)\/.*/\1/p' /tmp/pylint.txt > public/badges/$CI_JOB_NAME.score
+#     - pylint --exit-zero --output-format=pylint_gitlab.GitlabCodeClimateReporter $(find -type f -name "*.py" ! -path "**/.venv/**") > codeclimate.json
+#     - pylint --exit-zero --output-format=pylint_gitlab.GitlabPagesHtmlReporter $(find -type f -name "*.py" ! -path "**/.venv/**") > public/lint/index.html
+#   after_script:
+#     - anybadge --overwrite --label $CI_JOB_NAME --value=$(cat public/badges/$CI_JOB_NAME.score) --file=public/badges/$CI_JOB_NAME.svg 4=red 6=orange 8=yellow 10=green
+#     - |
+#       echo "Your score is: $(cat public/badges/$CI_JOB_NAME.score)"
+#   artifacts:
+#     paths:
+#       - public
+#     reports:
+#       codequality: codeclimate.json
+#     when: always
