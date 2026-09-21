@@ -42,7 +42,6 @@ class DeepSetModelHGQ(QKerasModel):
                                          "epochs" : And(int, lambda s: s >= 1),
                                          "batch_size" : And(int, lambda s: s >= 1),
                                          "learning_rate": And(float, lambda s: s > 0.0),
-                                         "loss_weights" : And(list, lambda s: len(s) == 2),
                                          "EarlyStopping_patience" : And(int, lambda s: s > 0),
                                          "ReduceLROnPlateau_factor" : And(float, lambda s: 1.0 >= s >= 0.0),
                                          "ReduceLROnPlateau_patience" : int,
@@ -90,15 +89,15 @@ class DeepSetModelHGQ(QKerasModel):
         )(pt_regress)
 
         # Define the model using both branches
-        self.jet_model = tf.keras.Model(inputs=inputs, outputs=[jet_id, pt_regress])
+        self.event_model = tf.keras.Model(inputs=inputs, outputs=[jet_id, pt_regress])
 
-        print(self.jet_model.summary())
+        print(self.event_model.summary())
 
     # Redefine save and load for HGQ due to needing h5 format
     @JetTagModel.save_decorator
     def save(self, out_dir):
         # Export the model
-        model_export = tfmot.sparsity.keras.strip_pruning(self.jet_model)
+        model_export = tfmot.sparsity.keras.strip_pruning(self.event_model)
         os.makedirs(os.path.join(out_dir, 'model'), exist_ok=True)
         export_path = os.path.join(out_dir, "model/saved_model.h5")
         model_export.save(export_path)
@@ -108,4 +107,4 @@ class DeepSetModelHGQ(QKerasModel):
     def load(self, out_dir=None):
         # Load model
 
-        self.jet_model = load_qmodel(f"{out_dir}/model/saved_model.h5")
+        self.event_model = load_qmodel(f"{out_dir}/model/saved_model.h5")

@@ -19,7 +19,7 @@ style.set_style()
 def getReports(indir):
     data_ = {}
 
-    report_csynth = Path('{}/L1TSC4NGJetModel_prj/solution1/syn/report/L1TSC4NGJetModel_csynth.rpt'.format(indir))
+    report_csynth = Path('{}/L1TSC4NGEventModel_prj/solution1/syn/report/L1TSC4NGEventModel_csynth.rpt'.format(indir))
 
     if report_csynth.is_file():
         print('Found valid vsynth and synth in {}! Fetching numbers'.format(indir))
@@ -57,8 +57,8 @@ def doPlots(model, outputdir, inputdir):
     labels = list(class_labels.keys())
 
     model.firmware_convert("temp", build=False)
-    y_hls, y_ptreg_hls = model.hls_jet_model.predict(np.ascontiguousarray(X_test))
-    y_class, y_ptreg = model.jet_model.predict(np.ascontiguousarray(X_test))
+    y_hls, y_ptreg_hls = model.hls_event_model.predict(np.ascontiguousarray(X_test))
+    y_class, y_ptreg = model.event_model.predict(np.ascontiguousarray(X_test))
 
     for i, label in enumerate(labels):
         plt.clf()
@@ -90,14 +90,14 @@ def doPlots(model, outputdir, inputdir):
     figure.savefig("%s/%s_score_2D.pdf" % (outputdir, "Regression"), bbox_inches='tight')
     plt.close()
 
-    wp, wph, ap, aph = hls4ml.model.profiling.numerical(model=model.jet_model, hls_model=model.hls_jet_model, X=X_test)
+    wp, wph, ap, aph = hls4ml.model.profiling.numerical(model=model.event_model, hls_model=model.hls_event_model, X=X_test)
     ap.savefig(outputdir + "/model_activations_profile.png")
     wp.savefig(outputdir + "/model_weights_profile.png")
     aph.savefig(outputdir + "/model_activations_profile_opt.png")
     wph.savefig(outputdir + "/model_weights_profile_opt.png")
 
-    y_hls, hls4ml_trace = model.hls_jet_model.trace(np.ascontiguousarray(X_test))
-    keras_trace = hls4ml.model.profiling.get_ymodel_keras(model.jet_model, X_test)
+    y_hls, hls4ml_trace = model.hls_event_model.trace(np.ascontiguousarray(X_test))
+    keras_trace = hls4ml.model.profiling.get_ymodel_keras(model.event_model, X_test)
 
     for layer in hls4ml_trace.keys():
         print("Doing profiling 2d for layer", layer)
@@ -145,8 +145,7 @@ if __name__ == "__main__":
 
     print("===================")
     print('Input Precision : ', model.firmware_config['input_precision'])
-    print('Class Precision : ', model.firmware_config['class_precision'])
-    print('Regression Precision : ', model.firmware_config['reg_precision'])
+    print('Class Precision : ', model.firmware_config['output_precision'])
     print(" Resource Usage of a VU13P")
     print('Flip Flops : ', report['ff_rel'], ' %')
     print('Look Up Tables : ', report['lut_rel'], ' %')

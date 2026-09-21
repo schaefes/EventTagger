@@ -28,21 +28,19 @@ class JetTagModel(ABC):
         """
         self.output_directory = output_dir
 
-        self.jet_model = None
-        self.hls_jet_model = None
+        self.event_model = None
+        self.hls_event_model = None
 
-        self.input_vars = []
-        self.extra_vars = []
         self.class_labels = []
 
         self.run_config = {}
         self.model_config = {}
         self.quantization_config = {}
         self.training_config = {}
+        self.inputs_config = {}
         self.firmware_config = {}
 
-        self.output_id_name = 'jet_id_output'
-        self.output_pt_name = 'pT_output'
+        self.output_id_name = 'event_id_output'
         self.loss_name = ''
 
         self.callbacks = []
@@ -68,6 +66,7 @@ class JetTagModel(ABC):
         self.model_config = yaml_dict['model_config']
         self.quantization_config = yaml_dict['quantization_config']
         self.training_config = yaml_dict['training_config']
+        self.inputs_config = yaml_dict['inputs_config']
         if "firmware_config" in yaml_dict:
             self.firmware_config = yaml_dict['firmware_config']
 
@@ -106,7 +105,7 @@ class JetTagModel(ABC):
         Returns:
             tuple: (class_predictions , pt_ratio_predictions)
         """
-        model_outputs = self.jet_model.predict(X_test)
+        model_outputs = self.event_model.predict(X_test)
         class_predictions = model_outputs[0]
         pt_ratio_predictions = model_outputs[1].flatten()
         return (class_predictions, pt_ratio_predictions)
@@ -128,11 +127,11 @@ class JetTagModel(ABC):
                 out_dir = self.output_directory
             # Save additional jsons associated with model
             # Dump input variables
-            with open(os.path.join(out_dir, "input_vars.json"), "w") as f:
-                json.dump(self.input_vars, f, indent=4)
+            with open(os.path.join(out_dir, "collection_vars.json"), "w") as f:
+                json.dump(self.collection_vars, f, indent=4)
             # Dump extra variables
-            with open(os.path.join(out_dir, "extra_vars.json"), "w") as f:
-                json.dump(self.extra_vars, f, indent=4)
+            with open(os.path.join(out_dir, "event_features_vars.json"), "w") as f:
+                json.dump(self.event_feature_vars, f, indent=4)
             # Dump class variables
             with open(os.path.join(out_dir, "class_labels.json"), "w") as f:
                 json.dump(self.class_labels, f, indent=4)
@@ -157,30 +156,24 @@ class JetTagModel(ABC):
             if out_dir == "None":
                 out_dir = self.output_directory
             # Save additional jsons associated with model
-            # Dump input variables
-            with open(os.path.join(out_dir, "input_vars.json"), "r") as f:
-                self.input_vars = json.load(f)
-            # Dump extra variables
+            # Dump class labels
             with open(os.path.join(out_dir, "class_labels.json"), "r") as f:
                 self.class_labels = json.load(f)
-            # Dump class variables
-            with open(os.path.join(out_dir, "extra_vars.json"), "r") as f:
-                self.extra_vars = json.load(f)
             # Do the rest of the loading, defined in child class
             load_func(self, out_dir)
 
         return wrapper
 
-    def set_labels(self, input_vars: str, extra_vars: str, class_labels: str):
+    def set_labels(self, collection_vars: str, event_feature_vars: str, class_labels: str):
         """Set internal labels
 
         Args:
-            input_vars (str): Input variable names
-            extra_vars (str): Extra variable names
+            collection_vars (str): Input variable names
+            event_feature_vars (str): Extra variable names
             class_labels (str): Class label names
         """
-        self.input_vars = input_vars
-        self.extra_vars = extra_vars
+        self.collection_vars = collection_vars
+        self.event_feature_vars = event_feature_vars
         self.class_labels = class_labels
 
     def plot_loss(self):
@@ -191,7 +184,7 @@ class JetTagModel(ABC):
         os.makedirs(plot_path, exist_ok=True)
 
         # Plot history
-        loss_history(plot_path, [self.loss_name + self.output_id_name, self.loss_name + self.output_pt_name], self.history)
+        loss_history(plot_path, [self.loss_name + self.output_id_name], self.history)
 
 
 class JetModelFactory:

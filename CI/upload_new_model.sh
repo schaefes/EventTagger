@@ -19,9 +19,9 @@ mv output/$Model/plots/physics/ $Name/plots
 
 if [[ "$RUN_SYNTHESIS" == "True" ]]; then
     cd output/$Model/firmware/
-    tar -cvf L1TSC4NGJetModel.tgz L1TSC4NGJetModel
+    tar -cvf L1TSC4NGEventModel.tgz L1TSC4NGEventModel
     eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
-    cp -r L1TSC4NGJetModel.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
+    cp -r L1TSC4NGEventModel.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
     cd ../../..
     mv output/$Model/plots/profile $Name/plots
 fi
@@ -29,7 +29,7 @@ fi
 if [[ "$RUN_EMULATION" == "True" ]]; then
     mv output/$Model/plots/emulation $Name/plots
     eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/emulator/
-    cp -r ${CMSSW_VERSION}/src/L1TSC4NGJetModel ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/emulator
+    cp -r ${CMSSW_VERSION}/src/L1TSC4NGEventModel ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/emulator
 fi
 
 cd ..

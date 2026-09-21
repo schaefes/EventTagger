@@ -234,8 +234,7 @@ OPTIONAL if you want to run firmware synthesis
 ```
 firmware_config:
   input_precision: 'ap_fixed<24,12,AP_RND,AP_SAT>'
-  class_precision: 'ap_ufixed<24,12,AP_RND,AP_SAT>'
-  reg_precision: 'ap_fixed<16,6,AP_RND,AP_SAT>'
+  output_precision: 'ap_ufixed<24,12,AP_RND,AP_SAT>'
 
   clock_period : 2.5
   fpga_part : 'xcvu13p-flga2577-2-e'

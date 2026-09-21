@@ -54,29 +54,17 @@ CLASS_LABEL_STYLE = {
     "leptons": "Leptons (muon, electron)",
 }
 
-INPUT_FEATURE_STYLE = {
-    'pt': '$p_T$',
-    'pt_rel': 'relative $p_T$',
-    'pt_log': '$log(p_T)$',
-    'deta': '$\\Delta\\eta$',
-    'dphi': '$\\Delta\\phi$',
-    'mass': 'mass',
-    'isPhoton': 'PID: photon',
-    'isElectronPlus': 'PID: electron +',
-    'isElectronMinus': 'PID: electron -',
-    'isMuonPlus': 'PID: muon +',
-    'isMuonMinus': 'PID: muon -',
-    'isNeutralHadron': 'PID: hadron neutral',
-    'isChargedHadronPlus': 'PID: hadron +',
-    'isChargedHadronMinus': 'PID: hadron -',
-    'z0': '$z_0$',
-    'dxy': '$d_{xy}$',
-    'isfilled': 'record filled',
-    'puppiweight': 'PUPPI Weight',
-    'quality': 'Track Quality',
-    'emid': 'ElectroMagnetic ID',
+PROCESS_STYLE = {
+        'GGFHHTo4B': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$b$\bar{b}$',
+        'VBFHtt': r'VBF $\rightarrow$ H $\rightarrow$ t$\bar{t}$',
+        'GGFHHTo2B2Tau': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$',
+        'MinBias': 'MinBias',
+        'VBFHToBB': r"$VBF H \to b\bar{b}$",
+        'VBFHToCC': r"$VBF H \to c\bar{c}$",
+        'VBFHToInvisible': r"$VBF \to invisible$",
+        'VBF': r"$VBF H \to b\bar{b}, c\bar{c}, \tau^+\tau^-$",
+        'GGF': r"$gg \to HH \to b\bar{b}b\bar{b}, b\bar{b}\tau^+\tau^-$",
 }
-
 
 def set_style():
     # Setup plotting to CMS style

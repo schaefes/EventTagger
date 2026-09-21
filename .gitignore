@@ -15,7 +15,7 @@ training_data*
 hls4ml/**
 *adb*
 *.autopilot*
-*L1TSC4NGJetModel*
+*L1TSC4NGEventModel*
 output/*
 data/*
 emulation_data/**

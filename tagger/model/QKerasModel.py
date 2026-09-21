@@ -12,13 +12,14 @@ import numpy.typing as npt
 import tensorflow as tf
 import tensorflow_model_optimization as tfmot
 from schema import Schema, And, Use, Optional
+from tagger.data.tools import get_input_mask
 
 # Qkeras
 from qkeras.quantizers import quantized_bits
 from qkeras.utils import load_qmodel
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-from tagger.model.common import AAtt, AttentionPooling, choose_aggregator
+from tagger.model.common import choose_aggregator
 from tagger.model.JetTagModel import JetModelFactory, JetTagModel
 
 class QKerasModel(JetTagModel):
@@ -30,21 +31,26 @@ class QKerasModel(JetTagModel):
 
     quantization_schema = {'quantizer_bits' : And(int, lambda s: 32 >= s >= 0),
                            'quantizer_bits_int' : And(int, lambda s: 32 >= s >= 0),
-                           'quantizer_alpha_val' : And(float, lambda s: 1.0 >= s >= 0.0),
-                           'pt_output_quantization' : list}
+                           'quantizer_alpha_val' : And(float, lambda s: 1.0 >= s >= 0.0)
+                           }
 
-    training_config_schema =    {"weight_method" : And(str, lambda s: s in  ["none", "ptref", "onlyclass"]),
+    training_config_schema =    {"weight_method" : list,
                                  "validation_split" : And(float, lambda s: s > 0.0),
                                  "epochs" : And(int, lambda s: s >= 1),
                                  "batch_size" : And(int, lambda s: s >= 1),
                                  "learning_rate" : And(float, lambda s: s > 0.0),
-                                 "loss_weights" : And(list, lambda s: len(s) == 2),
                                  "initial_sparsity" : And(float, lambda s: 1.0 >= s >= 0.0),
                                  "final_sparsity" : And(float, lambda s: 1.0 >= s >= 0.0),
                                  "EarlyStopping_patience" : And(int, lambda s: s > 0),
                                  "ReduceLROnPlateau_factor" : And(float, lambda s: 1.0 >= s >= 0.0),
                                  "ReduceLROnPlateau_patience" : int,
-                                 "ReduceLROnPlateau_min_lr" : And(float, lambda s: s >= 0.0)}
+                                 "ReduceLROnPlateau_min_lr" : And(float, lambda s: s >= 0.0),
+                                 "binary": bool}
+
+    inputs_config_schema = {"collections" : dict,
+                            "masks" : list,
+                            "event_features" : list,
+                            "combine" : bool}
 
     def _prune_model(self, num_samples: int):
         """Pruning setup for the model, internal model function called by compile
@@ -69,7 +75,7 @@ class QKerasModel(JetTagModel):
                 end_step=end_step,
             )
         }
-        self.jet_model = tfmot.sparsity.keras.prune_low_magnitude(self.jet_model, **pruning_params)
+        self.event_model = tfmot.sparsity.keras.prune_low_magnitude(self.event_model, **pruning_params)
 
         # Add preface to loss name
         self.loss_name = 'prune_low_magnitude_'
@@ -99,28 +105,54 @@ class QKerasModel(JetTagModel):
             self._prune_model(num_samples)
 
         # compile the tensorflow model setting the loss and metrics
-        self.jet_model.compile(
+        is_binary = self.training_config["binary"]
+        self.event_model.compile(
             optimizer='adam',
             loss={
-                self.loss_name + self.output_id_name: 'categorical_crossentropy',
-                self.loss_name + self.output_pt_name: tf.keras.losses.Huber(),
+                self.loss_name + self.output_id_name: 'binary_crossentropy' if is_binary else 'categorical_crossentropy',
             },
-            loss_weights=self.training_config['loss_weights'],
             metrics={
-                self.loss_name + self.output_id_name: 'categorical_accuracy',
-                self.loss_name + self.output_pt_name: ['mae', 'mean_squared_error'],
+                self.loss_name + self.output_id_name: 'binary_accuracy' if is_binary else 'categorical_accuracy',
             },
             weighted_metrics={
-                self.loss_name + self.output_id_name: 'categorical_accuracy',
-                self.loss_name + self.output_pt_name: ['mae', 'mean_squared_error'],
+                self.loss_name + self.output_id_name: 'binary_accuracy' if is_binary else 'categorical_accuracy',
             },
         )
 
+    def prepare_inputs(self, raw_dict):
+
+        data_dict = {}
+        model_dict = {}
+        for f in self.inputs_config['collections']:
+            data_dict[f"{f}_input"] = raw_dict[f]
+
+        for m in self.inputs_config['masks']:
+            model_dict[f'{m}_mask'] = get_input_mask(data_dict[f"{m}_input"], 10)
+
+        event_features = []
+        for i in self.inputs_config['event_features']:
+            event_features.append(raw_dict[i])
+        event_features = np.stack(event_features, axis=1)
+
+        data_dict['event_features_input'] = event_features
+
+        # combine all into a single input if specified in the config
+        if self.inputs_config['combine']:
+            flattend_inps = [arr.reshape(arr.shape[0], -1) for arr in data_dict.values()]
+            model_dict['model_input'] = np.concatenate(flattend_inps, axis=-1)
+        else:
+            model_dict.update(data_dict)
+
+        input_shapes = {}
+        for k, v in model_dict.items():
+            input_shapes[k] = v.shape[1:]
+
+        return model_dict, input_shapes
+
     def fit(
         self,
-        X_train: npt.NDArray[np.float64],
+        X_train: dict,
         y_train: npt.NDArray[np.float64],
-        pt_target_train: npt.NDArray[np.float64],
         sample_weight: npt.NDArray[np.float64],
     ):
         """Fit the model to the training dataset
@@ -128,14 +160,13 @@ class QKerasModel(JetTagModel):
         Args:
             X_train (npt.NDArray[np.float64]): X train dataset
             y_train (npt.NDArray[np.float64]): y train classification targets
-            pt_target_train (npt.NDArray[np.float64]): y train pt regression targets
             sample_weight (npt.NDArray[np.float64]): sample weighting
         """
 
         # Train the model using hyperparameters in yaml config
-        self.history = self.jet_model.fit(
-            {'model_input': X_train},
-            {self.loss_name + self.output_id_name: y_train, self.loss_name + self.output_pt_name: pt_target_train},
+        self.history = self.event_model.fit(
+            X_train,
+            {self.loss_name + self.output_id_name: y_train},
             sample_weight=sample_weight,
             epochs=self.training_config['epochs'],
             batch_size=self.training_config['batch_size'],
@@ -154,7 +185,7 @@ class QKerasModel(JetTagModel):
             out_dir (str, optional): Where to save it if not in the output_directory. Defaults to "None".
         """
         # Export the model
-        model_export = tfmot.sparsity.keras.strip_pruning(self.jet_model)
+        model_export = tfmot.sparsity.keras.strip_pruning(self.event_model)
 
         os.makedirs(os.path.join(out_dir, 'model'), exist_ok=True)
         # Use keras save format !NOT .h5! due to depreciation
@@ -172,9 +203,7 @@ class QKerasModel(JetTagModel):
 
         # Additional custom objects for attention layers
         custom_objects_ = {
-            "AAtt": AAtt,
-            "AttentionPooling": AttentionPooling,
         }
 
         # Load the model
-        self.jet_model = load_qmodel(f"{out_dir}/model/saved_model.keras", custom_objects=custom_objects_)
+        self.event_model = load_qmodel(f"{out_dir}/model/saved_model.keras", custom_objects=custom_objects_)
