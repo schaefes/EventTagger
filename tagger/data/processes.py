@@ -14,18 +14,18 @@ PROC_PATHS = {
 
 # processed datasets
 DATASETS = {
-    "QCD": [f"/eos/user/s/stella/EventTagger/data/QCD"],
-    "VBFHToBB": [f"/eos/user/s/stella/EventTagger/data/VBFHToBB"],
-    "VBFHToCC": [f"/eos/user/s/stella/EventTagger/data/VBFHToCC"],
-    "VBFHToTauTau": [f"/eos/user/s/stella/EventTagger/data/VBFHToTauTau"],
-    "VBF": [f"/eos/user/s/stella/EventTagger/data/VBFHToBB",
-            f"/eos/user/s/stella/EventTagger/data/VBFHToCC",
-            f"/eos/user/s/stella/EventTagger/data/VBFHToTauTau"],
-    "GGF": [f"/eos/user/s/stella/EventTagger/data/GGFHHTo4B",
-            f"/eos/user/s/stella/EventTagger/data/GGFHHTo2B2Tau"],
-    "MinBias": [f"/eos/user/s/stella/EventTagger/data/MinBias"],
-    "GGFHHTo4B": [f"/eos/user/s/stella/EventTagger/data/GGFHHTo4B"],
-    "GGFHHTo2B2Tau": [f"/eos/user/s/stella/EventTagger/data/GGFHHTo2B2Tau"],
+    "QCD": [os.path.join("files", "QCD")],
+    "VBFHToBB": [os.path.join("files", "VBFHToBB")],
+    "VBFHToCC": [os.path.join("files", "VBFHToCC")],
+    "VBFHToTauTau": [os.path.join("files", "VBFHToTauTau")],
+    "VBF": [os.path.join("files", "VBFHToBB"),
+            os.path.join("files", "VBFHToCC"),
+            os.path.join("files", "VBFHToTauTau")],
+    "GGF": [os.path.join("files", "GGFHHTo4B"),
+            os.path.join("files", "GGFHHTo2B2Tau")],
+    "MinBias": [os.path.join("files", "MinBias")],
+    "GGFHHTo4B": [os.path.join("files", "GGFHHTo4B")],
+    "GGFHHTo2B2Tau": [os.path.join("files", "GGFHHTo2B2Tau")],
     }
 
 BACKGROUND_PROCESSES = ["QCD", "MinBias"]

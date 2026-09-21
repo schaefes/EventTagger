@@ -117,7 +117,6 @@ if __name__ == "__main__":
                 "/(L1nnPuppiTau)_(pt|eta|phi)/",
                 "L1puppiMET_pt", "L1puppiMET_et"
                 ]
-
     data = load_data(PROC_PATHS[args.signal], branches)
     main(data, 1, 0, save_path)
 

@@ -13,7 +13,7 @@ from tagger.plot.basic import basic
 tf.keras.utils.set_random_seed(42)
 tf.config.experimental.enable_op_determinism()
 
-def train(model, model_path, processes):
+def train(model, model_path, data_path, processes):
     # load data
     train_data, test_data, train_labels, test_labels, labels_dict = load_data(processes, model)
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     parser.add_argument('--train', action='store_true', help='Train the model')
     parser.add_argument('--evaluate', action='store_true', help='Evaluate the model')
     parser.add_argument('--model-config', type=str, default='ffbinary.yaml')
-    parser.add_argument('--model-name', type=str, default='/eos/user/s/stella/EventTagger/output/ffbinary')
+    parser.add_argument('--model-name', type=str, default='output/ffbinary')
     args = parser.parse_args()
     args.processes.sort()
 
@@ -70,9 +70,9 @@ if __name__ == "__main__":
     # train the model
     if args.train:
         model_config = os.path.join("tagger/model/configs/", args.model_config)
-        procs_soreted = sorted(args.processes)
-        model_name = os.path.join(args.model_name, "_".join(procs_soreted))
-        model = fromYaml(model_config, args.model_name)
+        procs_sorted = sorted(args.processes)
+        model_name = os.path.join(args.model_name, "_".join(procs_sorted))
+        model = fromYaml(model_config, model_name)
         train(model, args.model_name, args.processes)
 
     if args.evaluate:

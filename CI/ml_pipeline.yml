@@ -5,17 +5,13 @@ stages:
   - data
   - train
   - evaluate
-  - hls4ml
-  - synth
-  - profile
-  - upload
-  - test
 
 variables:
     Name: new_samples_baseline_5param_extended_trk
     Inputs: baseline
     Model: baseline
-    EOS_STORAGE_DIR: /eos/user/s/stella/EventTagger
+    EOS_STORAGE_DIR: /eos/user/s/stella/EventTaggerCI/files
+    EOS_MODEL_DIR: /eos/user/s/stella/EventTaggerCI/output
     AUTO_DEVOPS_CERNBOX_USER: stella
 
 .template:
@@ -44,20 +40,18 @@ data:
   #       - tagger/data/**
   #     when: manual
   script:
-  - source activate tagger
+  - source activate eventtagger
   - mkdir data
   - cd data
   - export EOS_MGM_URL=root://eoscms.cern.ch
-  - eos cp $EOS_DATA_DIR/${TRAIN} .
-  - eos cp $EOS_DATA_DIR/${SIGNAL}.root .
   - cd ..
-  - python tagger/data/make_data.py -i data/${TRAIN} --tree $NTUPLE_TREE -sig $SIGNAL
-  - tar -cf training_data_$Inputs.tgz training_data
-  - tar -cf signal_process_data.tgz signal_process_data
+  - python tagger/data/make_data.py --signal ${PROCESS}
   - export EOS_MGM_URL=root://eosproject.cern.ch
-  - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
-  - eos cp training_data_$Inputs.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
-  - eos cp signal_process_data.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
+  - eos mkdir -p ${EOS_STORAGE_DIR}/${PROCESS}
+  - eos cp training_data.tgz ${EOS_STORAGE_DIR}/${PROCESS}
+  parallel:
+    matrix:
+      - PROCESS: ["MinBias", "VBFHToBB", "VBFHToTauTau", "VBFHToCC", "GGFHHTo4B", "GGFHHTo2B2Tau"]
 
 train:
   extends:
@@ -66,11 +60,38 @@ train:
   needs:
     - job : data
       optional: true
-  script:
-  - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
-  - tar -xf training_data_$Inputs.tgz
-  - source activate tagger
-  - ./CI/run_training.sh $RERUN_ON_TAG
+script:
+  - source activate eventtagger
+  - mkdir -p data
+  - |
+      IFS=',' read -ra PROCS <<< "$Train_processes"
+
+      for PROC in "${PROCS[@]}"; do
+        echo "Fetching ${PROC}..."
+        eos cp "${EOS_STORAGE_DIR}/${PROC}/training_data.tgz" .
+        mkdir -p "data/${PROC}"
+        tar -xf training_data.tgz -C "data/${PROC}"
+        rm training_data.tgz
+      done
+
+      # Sort processes so the order in Train_processes does not matter
+      IFS=$'\n' SORTED_PROCS=($(printf '%s\n' "${PROCS[@]}" | sort))
+
+      PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
+
+      MODEL_SUBDIR="${EOS_MODEL_DIR}/${Name}/${PROCESS_SUFFIX}"
+
+      echo "Saving model to: ${MODEL_SUBDIR}"
+
+      python tagger/train/train.py --train --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
+      python tagger/train/train.py --evaluate --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
+
+      cd "output/${Model}/${PROCESS_SUFFIX}"
+
+      eos mkdir -p "${MODEL_SUBDIR}"
+      eos cp -r * "${MODEL_SUBDIR}"
+
+      export MODEL_LOCATION="${MODEL_SUBDIR}"
   artifacts:
     paths:
       - output
@@ -84,7 +105,6 @@ evaluate:
   stage: evaluate
   tags: [cern-nextgen-h100]
   script:
-  - nproc
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger

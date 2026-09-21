@@ -31,3 +31,4 @@ DeepSet:baseline_5param_extended_trk:
   variables:
     Name: ffbinary
     Model: ffbinary
+    Train_processes: "MinBias,GGFHHTo4B"
