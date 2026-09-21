@@ -19,7 +19,7 @@ variables:
     AUTO_DEVOPS_CERNBOX_USER: stella
 
 .template:
-  image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
+  image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_eventtagger:latest
   before_script:
     - export PYTHONPATH=/builds/ml_l1/EventTagger:$PYTHONPATH
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
@@ -39,10 +39,10 @@ data:
   variables:
     KUBERNETES_MEMORY_REQUEST: 32Gi
     KUBERNETES_CPU_REQUEST: 2
-  rules:
-    - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
-        - tagger/data/**
-      when: manual
+  # rules:
+  #   - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
+  #       - tagger/data/**
+  #     when: manual
   script:
   - source activate tagger
   - mkdir data
