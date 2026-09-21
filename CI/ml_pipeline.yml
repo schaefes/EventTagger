@@ -121,12 +121,12 @@ data:
 #       - .npy
 #     expire_in: 7 days
 
-# code_quality:
-#    tags:
-#     - docker-privileged-xl
-#    artifacts:
-#     reports:
-#       codequality: gl-code-quality-report.json
+code_quality:
+   tags:
+    - docker-privileged-xl
+   artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
 
 # pylint:
 #   stage: test
