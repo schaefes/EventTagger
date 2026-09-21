@@ -1,4 +1,4 @@
-name: tagger
+name: eventtagger
 channels:
   - conda-forge
 dependencies:

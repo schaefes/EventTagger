@@ -3,19 +3,17 @@ include:
 
 stages:
   - data
+  - test
   # - train
   # - evaluate
 
 variables:
-    Name: new_samples_baseline_5param_extended_trk
-    Inputs: baseline
-    Model: baseline
     EOS_STORAGE_DIR: /eos/user/s/stella/EventTaggerCI/files
     EOS_MODEL_DIR: /eos/user/s/stella/EventTaggerCI/output
     AUTO_DEVOPS_CERNBOX_USER: stella
 
 .template:
-  image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_eventtagger:latest
+  image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
   before_script:
     - export PYTHONPATH=/builds/ml_l1/EventTagger:$PYTHONPATH
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
@@ -40,9 +38,9 @@ data:
   #       - tagger/data/**
   #     when: manual
   script:
-  - source activate eventtagger
-  - mkdir data
-  - cd data
+  - source activate tagger
+  - mkdir files
+  - cd files
   - export EOS_MGM_URL=root://eoscms.cern.ch
   - cd ..
   - python tagger/data/make_data.py --signal ${PROCESS}
@@ -107,7 +105,7 @@ data:
 #   script:
 #   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
 #   - tar -xf training_data_$Inputs.tgz
-#   - source activate tagger
+#   - source activate eventtagger
 #   - mkdir data
 #   - cd data
 #   - eos cp $EOS_DATA_DIR/$MINBIAS .
