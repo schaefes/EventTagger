@@ -15,7 +15,7 @@ variables:
 .template:
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_eventtagger:latest
   before_script:
-    - export PYTHONPATH=/builds/ml_l1/EventTagger:$PYTHONPATH
+    - export PYTHONPATH=/builds/stella/EventTagger:$PYTHONPATH
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
     - env
   script:
