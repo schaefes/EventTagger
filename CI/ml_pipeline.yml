@@ -15,6 +15,7 @@ variables:
 .template:
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_eventtagger:latest
   before_script:
+    - export PYTHONPATH=/builds/ml_l1/EventTaggerCI:$PYTHONPATH
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
     - env
   script:
@@ -37,7 +38,7 @@ data:
   #       - tagger/data/**
   #     when: manual
   script:
-  - source activate tagger
+  - source activate eventtagger
   - mkdir files
   - cd files
   - export EOS_MGM_URL=root://eoscms.cern.ch
