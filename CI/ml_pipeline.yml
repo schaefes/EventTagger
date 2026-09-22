@@ -71,23 +71,22 @@ script:
       done
 
       # Sort processes so the order in Train_processes does not matter
-      IFS=$'\n' SORTED_PROCS=($(printf '%s\n' "${PROCS[@]}" | sort))
+      SORTED_PROCS=($(printf '%s\n' "${PROCS[@]}" | sort))
 
       PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
 
       EOS_MODEL_SUBDIR="${EOS_MODEL_DIR}/${Name}/${PROCESS_SUFFIX}"
 
-      echo "Saving model to: ${EOS_MODEL_SUBDIR}"
+  - python tagger/train/train.py --train --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
+  - python tagger/train/train.py --evaluate --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
 
-      python tagger/train/train.py --train --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
-      python tagger/train/train.py --evaluate --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
+  - cd "output/${Model}/${PROCESS_SUFFIX}"
 
-      cd "output/${Model}/${PROCESS_SUFFIX}"
+  - eos mkdir -p "${EOS_MODEL_SUBDIR}"
+  - eos cp -r * "${EOS_MODEL_SUBDIR}"
+  - echo "Saving model to: ${EOS_MODEL_SUBDIR}"
 
-      eos mkdir -p "${EOS_MODEL_SUBDIR}"
-      eos cp -r * "${EOS_MODEL_SUBDIR}"
-
-      export MODEL_LOCATION="${EOS_MODEL_SUBDIR}"
+  - export MODEL_LOCATION="${EOS_MODEL_SUBDIR}"
   artifacts:
     paths:
       - output
