@@ -4,7 +4,7 @@ import awkward as ak
 import argparse
 import os
 import json
-import tagger.train.training_weights_funcs as weighting_funcs
+from tagger.train.training_weights_funcs import get_weights
 from argparse import ArgumentParser
 from tagger.model.common import fromFolder, fromYaml
 from tagger.data.tools import load_data
@@ -13,7 +13,7 @@ from tagger.plot.basic import basic
 tf.keras.utils.set_random_seed(42)
 tf.config.experimental.enable_op_determinism()
 
-def train(model, model_path, data_path, processes):
+def train(model, model_path, processes):
     # load data
     train_data, test_data, train_labels, test_labels, labels_dict = load_data(processes, model)
 
@@ -43,10 +43,18 @@ def train(model, model_path, data_path, processes):
 
     model.compile_model(num_samples)
 
+    context = dict(
+        data=train_data, labels=train_labels, class_labels=labels_dict,
+        ht_cut=200, pt_cuts=[0, 0], signal_floor=0.1, minbias_floor=0.1,
+        bkg_weights=1.0, region_weights=np.ones(train_labels.shape[0]),
+        model=model,
+    )
+
     # Training weights, function defined in training_weights.py
     training_weights = np.ones(train_labels.shape[0])
     for w in model.training_config["weight_method"]:
-        training_weights *= getattr(weighting_funcs, w)(train_labels)
+        training_weights *= get_weights(w, **context)
+        context["region_weights"] = training_weights
     model.fit(train_inputs, train_labels, training_weights)
 
     # Finished training, save model
