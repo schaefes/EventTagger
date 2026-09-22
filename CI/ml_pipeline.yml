@@ -29,14 +29,14 @@ data:
   extends:
     - .template
   stage: data
-  tags: [k8s-gpu]
+  tags: [cern-nextgen-h100]
   variables:
     KUBERNETES_MEMORY_REQUEST: 32Gi
     KUBERNETES_CPU_REQUEST: 2
-  rules:
-    - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
-        - tagger/data/**
-      when: manual
+  # rules:
+  #   - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
+  #       - tagger/data/**
+  #     when: manual
   script:
   - source activate eventtagger
   - mkdir files
@@ -55,6 +55,7 @@ train:
   extends:
     - .template
   stage: train
+  tags: [cern-nextgen-h100]
   needs:
     - job : data
       optional: true
