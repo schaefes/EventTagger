@@ -3,8 +3,8 @@ include:
 
 stages:
   - data
-  - test
   - train
+  - test
   # - evaluate
 
 variables:
@@ -33,10 +33,10 @@ data:
   variables:
     KUBERNETES_MEMORY_REQUEST: 32Gi
     KUBERNETES_CPU_REQUEST: 2
-  # rules:
-  #   - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
-  #       - tagger/data/**
-  #     when: manual
+  rules:
+    - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
+        - tagger/data/**
+      when: manual
   script:
   - source activate eventtagger
   - mkdir files
@@ -58,7 +58,7 @@ train:
   needs:
     - job : data
       optional: true
-script:
+  script:
   - source activate eventtagger
   - mkdir -p data
   - |
