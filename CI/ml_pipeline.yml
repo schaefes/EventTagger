@@ -60,7 +60,7 @@ train:
       optional: true
   script:
   - source activate eventtagger
-  - mkdir -p data
+  - mkdir -p files
   - |
       IFS=',' read -ra PROCS <<< "$Train_processes"
 
@@ -80,13 +80,13 @@ train:
   - python tagger/train/train.py --train --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
   - python tagger/train/train.py --evaluate --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
 
-  - cd "output/${Model}/${PROCESS_SUFFIX}"
+  # - cd "output/${Model}/${PROCESS_SUFFIX}"
 
-  - eos mkdir -p "${EOS_MODEL_SUBDIR}"
-  - eos cp -r * "${EOS_MODEL_SUBDIR}"
-  - echo "Saving model to: ${EOS_MODEL_SUBDIR}"
+  # - eos mkdir -p "${EOS_MODEL_SUBDIR}"
+  # - eos cp -r * "${EOS_MODEL_SUBDIR}"
+  # - echo "Saving model to: ${EOS_MODEL_SUBDIR}"
 
-  - export MODEL_LOCATION="${EOS_MODEL_SUBDIR}"
+  # - export MODEL_LOCATION="${EOS_MODEL_SUBDIR}"
   artifacts:
     paths:
       - output
