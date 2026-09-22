@@ -46,7 +46,7 @@ data:
   - python tagger/data/make_data.py --signal ${PROCESS}
   - export EOS_MGM_URL=root://eosproject.cern.ch
   - eos mkdir -p ${EOS_STORAGE_DIR}/${PROCESS}
-  - eos cp files/* ${EOS_STORAGE_DIR}/${PROCESS}
+  - eos cp files/${PROCESS}/* ${EOS_STORAGE_DIR}/${PROCESS}
   - eos cp training_data.tgz ${EOS_STORAGE_DIR}/${PROCESS}
   parallel:
     matrix:
