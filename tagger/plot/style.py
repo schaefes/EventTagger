@@ -55,15 +55,22 @@ CLASS_LABEL_STYLE = {
 }
 
 PROCESS_STYLE = {
-        'GGFHHTo4B': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$b$\bar{b}$',
+        'GGFHHTo4B': r'gg $\rightarrow$ HH $\rightarrow$ 4b',
+        'GGFHHTo2B2Tau': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$',
         'VBFHtt': r'VBF $\rightarrow$ H $\rightarrow$ t$\bar{t}$',
         'GGFHHTo2B2Tau': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$',
         'MinBias': 'MinBias',
         'VBFHToBB': r"$VBF H \to b\bar{b}$",
         'VBFHToCC': r"$VBF H \to c\bar{c}$",
         'VBFHToInvisible': r"$VBF \to invisible$",
-        'VBF': r"$VBF H \to b\bar{b}, c\bar{c}, \tau^+\tau^-$",
-        'GGF': r"$gg \to HH \to b\bar{b}b\bar{b}, b\bar{b}\tau^+\tau^-$",
+        'VBF': r"$VBF \to H (b\bar{b}, c\bar{c}, \tau^+\tau^-)$",
+        'GGF': r"$GGF \to HH (4b, 2b2\tau)$",
+}
+
+SCORE_LABEL_STYLE = {
+    'ovo_score': 'OvO',
+    'total_signal': r'$\Sigma$ sig',
+    'raw': 'Raw',
 }
 
 def set_style():

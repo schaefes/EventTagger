@@ -61,7 +61,7 @@ def to_ML(data, class_labels):
     return X, y, pt_target, truth_pt, reco_pt
 
 
-def load_data(processes, model, percentage=100, test_ratio=0.2):
+def load_data(processes, model, percentage=100, test_ratio=0.2, extras=[]):
     """
     Load a specified percentage of the dataset using uproot.concatenate.
 
@@ -75,32 +75,37 @@ def load_data(processes, model, percentage=100, test_ratio=0.2):
     """
     processes = sorted(processes, key=lambda p: (p != "MinBias", p))
     label_map = {proc: i for i, proc in enumerate(processes)}
-    collection_fields = list(model.inputs_config["collections"].keys())
-    event_fields = model.inputs_config["event_features"]
-    fields = collection_fields + event_fields
+    fields = model.inputs_config["collections"] + model.inputs_config["event_features"]
     labels_dict = {}
     data_by_field = {f: [] for f in fields}
     labels = []
+    extra_fields = {e: [] for e in extras} if extras else None
     for proc in processes:
         proc_paths = DATASETS[proc]
         for path in proc_paths:
             p = np.load(os.path.join(path, "data.npz"))
-            for k in model.inputs_config['collections']:
-                n_objects = model.inputs_config['collections'][k][1]
-                n_fields = len(model.inputs_config['collections'][k][0])
-                collection_object = np.empty((len(p[f"{k}_{model.inputs_config['collections'][k][0][0]}"]), n_fields * n_objects))
-                for i, f in enumerate(model.inputs_config['collections'][k][0]):
-                    collection_object[:, i::n_fields] = p[f"{k}_{f}"]
-                data_by_field[k].append(collection_object.reshape(collection_object.shape[0], n_objects, n_fields))
+            for extra in extras:
+                extra_fields[extra].append(p[extra])
+            for k in model.inputs_config['objects']:
+                n_objects = model.inputs_config['objects'][k][1]
+                n_fields = len(model.inputs_config['objects'][k][0])
+                n_events = len(p[f"{k}_{model.inputs_config['objects'][k][0][0]}"])
+                loaded_object = np.empty((n_events, n_fields * n_objects))
+                for i, f in enumerate(model.inputs_config['objects'][k][0]):
+                    loaded_object[:, i::n_fields] = p[f"{k}_{f}"][:, :n_objects]
+                data_by_field[k].append(loaded_object.reshape(loaded_object.shape[0], n_objects, n_fields))
 
-            for f in event_fields:
-                arr = p[f]
-                data_by_field[f].append(arr)
+            for f in model.inputs_config["event_features"]:
+                if f not in model.inputs_config['objects']:
+                    arr = p[f]
+                    data_by_field[f].append(arr)
 
-            labels.append(np.full(len(arr), label_map[proc]))
+            labels.append(np.full(n_events, label_map[proc]))
         labels_dict[proc] = label_map[proc]
+
     data = {f: np.concatenate(arrs, axis=0) for f, arrs in data_by_field.items()}
     labels = np.concatenate(labels, axis=0)
+    extra_fields = {e: np.concatenate(arrs, axis=0) for e, arrs in extra_fields.items()} if extras else None
 
     # convert labels to one-hot encoding if more than 2 classes
     if len(processes) > 2:
@@ -110,18 +115,22 @@ def load_data(processes, model, percentage=100, test_ratio=0.2):
     n_total = len(labels)
     rng = np.random.default_rng(seed=42)  # set a seed for reproducibility, or drop it
     perm = rng.permutation(n_total)
-
     data = {f: arr[perm] for f, arr in data.items()}
     labels = labels[perm]
+    extra_fields = {e: arr[perm] for e, arr in extra_fields.items()} if extras else None
 
     # split into train and test sets
     split_idx = int((1 - test_ratio) * n_total)
     train_data = {f: arr[:split_idx] for f, arr in data.items()}
     test_data = {f: arr[split_idx:] for f, arr in data.items()}
+    extra_fields = {e: arr[:split_idx] for e, arr in extra_fields.items()} if extras else None
     train_labels = labels[:split_idx]
     test_labels = labels[split_idx:]
 
-    return train_data, test_data, train_labels, test_labels, labels_dict
+    if extras:
+        return train_data, test_data, train_labels, test_labels, labels_dict, extra_fields
+    else:
+        return train_data, test_data, train_labels, test_labels, labels_dict
 
 def get_input_mask(jets_ds):
     n_features = 10

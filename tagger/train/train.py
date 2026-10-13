@@ -15,8 +15,7 @@ tf.config.experimental.enable_op_determinism()
 
 def train(model, model_path, processes):
     # load data
-    train_data, test_data, train_labels, test_labels, labels_dict = load_data(processes, model)
-
+    train_data, test_data, train_labels, test_labels, labels_dict, extras = load_data(processes, model, extras=['central_jet_ht'])
     train_inputs, train_shapes = model.prepare_inputs(train_data)
     test_inputs, _ = model.prepare_inputs(test_data)
     model.set_labels(
@@ -44,8 +43,8 @@ def train(model, model_path, processes):
     model.compile_model(num_samples)
 
     context = dict(
-        data=train_data, labels=train_labels, class_labels=labels_dict,
-        ht_cut=200, pt_cuts=[0, 0], signal_floor=0.1, minbias_floor=0.1,
+        data=train_data, jet_ht=extras['central_jet_ht'], labels=train_labels, class_labels=labels_dict,
+        ht_cut=300, pt_cuts=[np.inf, np.inf], signal_floor=0.2, minbias_floor=1.,
         bkg_weights=1.0, region_weights=np.ones(train_labels.shape[0]),
         model=model,
     )
@@ -75,14 +74,14 @@ if __name__ == "__main__":
 
     os.makedirs(args.model_name, exist_ok=True)
 
+    procs_sorted = sorted(args.processes)
+    model_dir = os.path.join(f"output/{args.model_name}", "_".join(procs_sorted))
     # train the model
     if args.train:
         model_config = os.path.join("tagger/model/configs/", args.model_config)
-        procs_sorted = sorted(args.processes)
-        model_name = os.path.join(args.model_name, "_".join(procs_sorted))
-        model = fromYaml(model_config, model_name)
-        train(model, args.model_name, args.processes)
+        model = fromYaml(model_config, model_dir)
+        train(model, model_dir, args.processes)
 
     if args.evaluate:
-        model = fromFolder(args.model_name)
+        model = fromFolder(model_dir)
         results = basic(model)

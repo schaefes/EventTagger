@@ -47,7 +47,8 @@ class QKerasModel(JetTagModel):
                                  "ReduceLROnPlateau_min_lr" : And(float, lambda s: s >= 0.0),
                                  "binary": bool}
 
-    inputs_config_schema = {"collections" : dict,
+    inputs_config_schema = {"collections" : list,
+                            "objects": dict,
                             "masks" : list,
                             "event_features" : list,
                             "combine" : bool}
@@ -123,16 +124,17 @@ class QKerasModel(JetTagModel):
 
         data_dict = {}
         model_dict = {}
-        for f in self.inputs_config['collections']:
-            data_dict[f"{f}_input"] = raw_dict[f]
+        for i, f in enumerate(self.inputs_config['collections']):
+            data_dict[f"collection{i}_input"] = raw_dict[f]
 
         for m in self.inputs_config['masks']:
-            model_dict[f'{m}_mask'] = get_input_mask(data_dict[f"{m}_input"], 10)
+            i = self.inputs_config['collections'].index(m)
+            model_dict[f'collection{i}_mask'] = get_input_mask(raw_dict[m])
 
         event_features = []
         for i in self.inputs_config['event_features']:
-            event_features.append(raw_dict[i])
-        event_features = np.stack(event_features, axis=1)
+            event_features.append(raw_dict[i].reshape(raw_dict[i].shape[0], -1))
+        event_features = np.concatenate(event_features, axis=1)
 
         data_dict['event_features_input'] = event_features
 
@@ -207,3 +209,22 @@ class QKerasModel(JetTagModel):
 
         # Load the model
         self.event_model = load_qmodel(f"{out_dir}/model/saved_model.keras", custom_objects=custom_objects_)
+
+    def get_scores(self, preds, signal):
+        """Get the score of the model for a given index
+
+        Args:
+            index (_type_): Index of the sample to get the score for
+
+        Returns:
+            _type_: Score of the model for the given index
+        """
+        if not self.training_config["binary"]:
+            signal_index = self.class_labels[signal]
+            minbias_index = self.class_labels["MinBias"]
+            ovo_score = preds[:, signal_index] / (preds[:, signal_index] + preds[:, minbias_index])
+            total_signal = 1 - preds[:, minbias_index]
+            return [ovo_score, total_signal], ["ovo_score", "total_signal"]
+        else:
+            return [preds.flatten()], ["raw"]
+

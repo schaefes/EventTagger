@@ -96,7 +96,7 @@ def ROC_binary(y_pred, y_true, class_labels, save_path):
     fig.tight_layout()
     fig2.tight_layout()
     fig.savefig(os.path.join(save_path, 'roc_curve.png'))
-    fig2.savefig(os.path.join(save_path, 'roc_curve_with_rate.png'))
+    fig2.savefig(os.path.join(save_path, 'roc_curve_with_rate.png'), transparent=True)
     return
 
 
@@ -104,7 +104,7 @@ def ROC_ovo(y_pred, y_test, class_labels, plot_dir, class_pair, signal_proc=None
     """
     Generate ROC curves comparing between two specific class labels.
     """
-    save_dir = os.path.join(plot_dir, 'roc_binary')
+    save_dir = os.path.join(plot_dir, 'roc_ovo')
     os.makedirs(save_dir, exist_ok=True)
 
     # Ensure class_pair exists in class_labels
@@ -133,9 +133,9 @@ def ROC_ovo(y_pred, y_test, class_labels, plot_dir, class_pair, signal_proc=None
     fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.CMSHEADER_SIZE)
     ax.plot(
-        tpr,
         fpr,
-        label=f'{style.PROCESS_STYLE[class_labels[class_pair[0]]]} vs {style.PROCESS_STYLE[class_labels[class_pair[1]]]} (AUC = {roc_auc:.2f})',
+        tpr,
+        label=f'{style.PROCESS_STYLE[class_pair[0]]} vs {style.PROCESS_STYLE[class_pair[1]]} (AUC = {roc_auc:.2f})',
         color='blue',
         linewidth=5,
     )
@@ -146,7 +146,7 @@ def ROC_ovo(y_pred, y_test, class_labels, plot_dir, class_pair, signal_proc=None
     leg._legend_box.align = "left"
 
     # Save the plot
-    save_path = os.path.join(save_dir, f"ROC_{class_labels[class_pair[0]]}_vs_{class_labels[class_pair[1]]}")
+    save_path = os.path.join(save_dir, f"ROC_{class_pair[0]}_vs_{class_pair[1]}")
     plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
     plt.close()
@@ -169,13 +169,12 @@ def ROC(y_pred, y_test, class_labels, plot_dir, ROC_dict):
         # Compute FPR, TPR, and AUC
         fpr, tpr, _ = roc_curve(y_true, y_score)
         roc_auc = auc(fpr, tpr)
-
         ROC_dict[class_labels[i]] = roc_auc
         # Plot the ROC curve for the current class
         ax.plot(
             fpr,
             tpr,
-            label=f'{style.PROCESS_STYLE[class_labels[class_label]]} (AUC = {roc_auc:.2f})',
+            label=f'{style.PROCESS_STYLE[class_labels[i]]} (AUC = {roc_auc:.2f})',
             color=colormap(i),
             linewidth=style.LINEWIDTH,
         )
@@ -422,10 +421,10 @@ def basic(model):
     # Plot ROC curves
     inverted_labels = {v: k for k, v in model.class_labels.items()}
     is_binary = model.training_config['binary']
-    if not model.training_config['binary']:
+    if not is_binary:
         # Confusion matrix
         confusion(y_pred, y_test, inverted_labels, plot_dir)
-        ROC(y_pred, y_test, model.class_labels, plot_dir, ROC_dict)
+        ROC(y_pred, y_test, inverted_labels, plot_dir, ROC_dict)
         class_pairs = []
         # Generate all possible pairs of classes
         for i in model.class_labels.keys():
@@ -436,7 +435,7 @@ def basic(model):
 
         # Plot the binary ROCs for each class pair
         for class_pair in class_pairs:
-            ROC_ovo(y_pred, y_test, is_binary, inverted_labels, plot_dir, class_pair)
+            ROC_ovo(y_pred, y_test, model.class_labels, plot_dir, class_pair)
     else:
         ROC_binary(y_pred, y_test, inverted_labels, plot_dir)
 

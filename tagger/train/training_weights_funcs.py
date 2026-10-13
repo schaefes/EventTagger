@@ -47,27 +47,43 @@ def effective_equal_classes(labels, region_weights, class_labels, bkg_weights=1.
 
     return weights
 
-def kinematic_region(data, ht_cut, pt_cuts, labels, class_labels, model, signal_floor=0.1, minbias_floor=0.1):
+def kinematic_region(data, jet_ht, ht_cut, pt_cuts, labels, class_labels, model, signal_floor=0., minbias_floor=0.):
     """
     Returns weights for signal and background depending on the kinematic region.
     Events already accepted through independet kinemtic cuts are downweighted.
     """
-    jet_ht = data['jet_ht']
     ht_passed = jet_ht >= ht_cut
-    pt_idx = model.inputs_config['collections']['sc4jets'][0].index('pt')
-    leading_jet_passed = data['sc4jets'][:, :, pt_idx][:, 0] >= pt_cuts[0]
-    subleading_jet_passed = data['sc4jets'][:, :, pt_idx][:, 1] >= pt_cuts[1]
+    # pt_idx = model.inputs_config['collections']['sc4jets'][0].index('pt')
+    # leading_jet_passed = data['sc4jets'][:, :, pt_idx][:, 0] >= pt_cuts[0]
+    # subleading_jet_passed = data['sc4jets'][:, :, pt_idx][:, 1] >= pt_cuts[1]
 
     # combine the conditions to find events that pass any of the cuts
-    already_covered = ht_passed | leading_jet_passed | subleading_jet_passed
+    already_covered = ht_passed # | leading_jet_passed | subleading_jet_passed
 
     minbias_label = class_labels['MinBias']
     is_signal = (labels != minbias_label)
     is_minbias = ~is_signal
 
     weights = np.ones_like(labels, dtype=float)
-    weights[is_signal]  = np.where(already_covered[is_signal],  signal_floor,  1.0)
+    weights[is_signal]  = np.where(already_covered[is_signal], signal_floor,  1.0)
     weights[is_minbias] = np.where(already_covered[is_minbias], minbias_floor, 1.0)
+
+    return weights
+
+def flat_ht(data, labels, alpha=.5, max_w=20.0):
+    """Per-class H_T flattening with shared bins, tilt exponent and clipped weights."""
+    bins = np.linspace(0, 1000, 51)
+    ht = np.clip(data['jet_ht'], bins[0], bins[-1] - 1e-6)
+    idx = np.clip(np.digitize(ht, bins) - 1, 0, len(bins) - 2)
+
+    weights = np.ones(len(ht))
+    for label in np.unique(labels):
+        m = labels == label
+        hist, _ = np.histogram(ht[m], bins=bins)
+        w = 1.0 / np.maximum(hist, 1) ** alpha
+        w = w[idx[m]]
+        w /= w.mean()                      # per-class mean 1
+        weights[m] = np.minimum(w, max_w)  # cap sparse-bin blow-up
 
     return weights
 
@@ -76,6 +92,7 @@ def kinematic_region(data, ht_cut, pt_cuts, labels, class_labels, model, signal_
 WEIGHT_FUNCTIONS = {
     "kinematic_region": kinematic_region,
     "effective_equal_classes": effective_equal_classes,
+    "flat_ht": flat_ht,
 }
 
 def get_weights(name, **context):
@@ -106,6 +123,5 @@ def get_weights(name, **context):
             kwargs[pname] = context[pname]
         elif param.default is inspect.Parameter.empty:
             raise TypeError(f"'{name}' requires '{pname}' but it wasn't provided in context")
-        # else: has a default, fine to omit
 
     return fn(**kwargs)

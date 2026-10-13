@@ -85,9 +85,9 @@ class DeepSetsBinaryModel(QKerasModel):
         }
 
         # Inputs
-        inputs_jets = tf.keras.layers.Input(shape=input_shapes["jets_input"], name="jets_input")
+        inputs_jets = tf.keras.layers.Input(shape=input_shapes["collection0_input"], name="collection0_input")
         inputs_event_features = tf.keras.layers.Input(shape=input_shapes["event_features_input"], name="event_features_input")
-        inputs_jets_mask = tf.keras.layers.Input(shape=input_shapes["jets_mask"], name="jets_mask")
+        inputs_jets_mask = tf.keras.layers.Input(shape=input_shapes["collection0_mask"], name="collection0_mask")
 
         # Batch Norm
         main = BatchNormalization(name="norm_input")(inputs_jets)
