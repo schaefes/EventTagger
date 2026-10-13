@@ -42,6 +42,7 @@ data:
   - mkdir files
   - cd files
   - export EOS_MGM_URL=root://eoscms.cern.ch
+  - export KRB5CCNAME=$(klist -e  | egrep -o 'FILE:.*')
   - cd ..
   - python tagger/data/make_data.py --signal ${PROCESS}
   - export EOS_MGM_URL=root://eosproject.cern.ch
