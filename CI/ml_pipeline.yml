@@ -17,6 +17,7 @@ variables:
   before_script:
     - export PYTHONPATH=/builds/stella/EventTagger:$PYTHONPATH
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
+    - export EOS_MGM_URL=root://eosuser.cern.ch
     - env
   script:
     - python $FOLDER/$SCRIPT $ARGS
@@ -61,6 +62,7 @@ train:
     - job : data
       optional: true
   script:
+  - export KRB5CCNAME=$(klist -e  | egrep -o 'FILE:.*')
   - source activate eventtagger
   - mkdir -p files
   - |
@@ -69,6 +71,7 @@ train:
       for PROC in "${PROCS[@]}"; do
         echo "Fetching ${PROC}..."
         mkdir -p "files/${PROC}"
+        eos ls "${EOS_STORAGE_DIR}/${PROC}
         eos cp "${EOS_STORAGE_DIR}/${PROC}/data.npz" files/${PROC}
       done
 
