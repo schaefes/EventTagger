@@ -71,7 +71,7 @@ train:
       for PROC in "${PROCS[@]}"; do
         echo "Fetching ${PROC}..."
         mkdir -p "files/${PROC}"
-        eos ls "${EOS_STORAGE_DIR}/${PROC}
+        eos ls "${EOS_STORAGE_DIR}/${PROC}"
         eos cp "${EOS_STORAGE_DIR}/${PROC}/data.npz" files/${PROC}
       done
 
