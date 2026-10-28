@@ -38,8 +38,6 @@ class FeedForwardBinaryModel(QKerasModel):
                 "run_config" : JetTagModel.run_schema,
                 "model_config" : {"name" : str,
                                   "conv1d_layers" : list,
-                                  "classification_layers" : list,
-                                  "regression_layers" : list,
                                   "kernel_initializer" : str,
                                   "aggregator" : And(str, lambda s: s in  ["mean", "max", "attention"])},
                 "quantization_config" : QKerasModel.quantization_schema,
@@ -63,8 +61,6 @@ class FeedForwardBinaryModel(QKerasModel):
 
         Additional hyperparameters in the config
             conv1d_layers: List of number of nodes for each layer of the conv1d layers.
-            classifier_layers: List of number of nodes for each layer of the classifier MLP.
-            regression_layers: List of number of nodes for each layer of the regression MLP
             aggregator: String that specifies the type of aggregator to use after the conv1D net.
         """
 
@@ -89,18 +85,11 @@ class FeedForwardBinaryModel(QKerasModel):
 
         main = BatchNormalization(name="norm_input")(inputs)
 
-        event_id = QDense(32, name="Dense_1_jetID", **self.common_args)(main)
+        event_id = QDense(64, name="Dense_1_jetID", **self.common_args)(main)
         event_id = QActivation(activation=quantized_relu(9, 2), name="relu_1")(event_id)
 
-        # (kept identical to your original code)
         event_id = QDense(32, name="Dense_2_jetID", **self.common_args)(event_id)
         event_id = QActivation(activation=quantized_relu(9, 2), name="relu_2")(event_id)
-
-        event_id = QDense(32, name="Dense_3_jetID", **self.common_args)(event_id)
-        event_id = QActivation(activation=quantized_relu(9, 2), name="relu_3")(event_id)
-
-        event_id = QDense(16, name="Dense_4_jetID", **self.common_args)(event_id)
-        event_id = QActivation(activation=quantized_relu(9, 2), name="relu_4")(event_id)
 
         event_id = QDense(output_shape, name="Dense_5_jetID", **self.common_args)(event_id)
 

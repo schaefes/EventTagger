@@ -38,8 +38,6 @@ class FeedForwardMulticlassModel(QKerasModel):
                 "run_config" : JetTagModel.run_schema,
                 "model_config" : {"name" : str,
                                   "conv1d_layers" : list,
-                                  "classification_layers" : list,
-                                  "regression_layers" : list,
                                   "kernel_initializer" : str,
                                   "aggregator" : And(str, lambda s: s in  ["mean", "max", "attention"])},
                 "quantization_config" : QKerasModel.quantization_schema,
@@ -63,8 +61,6 @@ class FeedForwardMulticlassModel(QKerasModel):
 
         Additional hyperparameters in the config
             conv1d_layers: List of number of nodes for each layer of the conv1d layers.
-            classifier_layers: List of number of nodes for each layer of the classifier MLP.
-            regression_layers: List of number of nodes for each layer of the regression MLP
             aggregator: String that specifies the type of aggregator to use after the conv1D net.
         """
 

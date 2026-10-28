@@ -5,7 +5,7 @@ import awkward as ak
 import matplotlib.pyplot as plt
 import mplhep as hep
 from tagger.data.processes import DATASETS
-from tagger.data.tools import load_data, totalMinBiasRate
+from tagger.data.tools import load_data, totalMinBiasRate, load_test_split
 from tagger.model.common import fromFolder
 from tagger.plot import style
 style.set_style()
@@ -15,62 +15,62 @@ X_VARS = {
     'mjj': [np.arange(0, 1000, 40), "m$_{jj}$ [GeV]"]
     }
 
-def find_working_points(model, signal, target_rates, save_path, tolerance=0.5, n_grid=900):
-    """
-    Find the score threshold such that the fraction of background (minbias)
-    events passing `score > threshold`, scaled by `input_rate_khz`, equals
-    `target_rate`.
 
-    Parameters
-    ----------
-    bkg_scores : array-like
-        Model scores for a representative minbias (background) sample.
-    target_rate : float
-        Desired output rate after the cut.
-    n_grid : int
-        Number of threshold points to scan (finer grid -> more precise wp).
-
-    Returns
-    -------
-    threshold : float
-        Score threshold achieving (approximately) the target rate.
-    achieved_rate_khz : float
-        The actual rate obtained at that threshold (closest achievable,
-        since the background sample is finite).
+def find_working_points(model, signal, ht_cut, target_rates, save_path, tolerance=0.5, n_grid=5300):
+    """... (same docstring) ...
+    ht_cut : float, optional
+        HT seed threshold for the OR. Defaults to the training cut.
     """
     proc_path = os.path.join(save_path, signal)
     os.makedirs(proc_path, exist_ok=True)
-    minbias, *_, minbias_extras = load_data(['MinBias'], model, percentage=100, test_ratio=0., extras=['central_jet_ht'])
+    minbias_path = os.path.join(model.output_directory, "testing_data")
+    minbias_split = load_test_split(['MinBias'], minbias_path)
+    minbias, *_, minbias_extras = load_data(['MinBias'], model, minbias_split, "test", extras=['central_jet_ht'])
     model_data = model.prepare_inputs(minbias)[0]
-    preds = model.event_model.predict(model_data)
+    preds = model.event_model.predict(model_data, batch_size=65536)
     scores, score_names = model.get_scores(preds, signal)
 
-    # Scan thresholds from min to max score
-    thresholds = np.linspace(0.88, 1, n_grid)
     n_bkg = len(preds)
+    total = totalMinBiasRate()
+    ht = minbias_extras['central_jet_ht']
 
+    # --- OR seed: events already accepted by HT ---
+    covered = ht > ht_cut
+    r_ht = covered.mean() * total                      # rate of the HT seed alone
+    uncovered_scores = [s[~covered] for s in scores]   # only these add rate to the OR
+
+    thresholds = np.linspace(0.05, 1, n_grid)
     for target_rate in target_rates:
-        # get thresholds for all types of scores
+        # ---- NN only (unchanged) ----
         for score, score_name in zip(scores, score_names):
-
-            # For each threshold, fraction passing -> rate
-            # (searchsorted on sorted scores is O(log n) per threshold, fast)
             sorted_scores = np.sort(score)
             n_passing = n_bkg - np.searchsorted(sorted_scores, thresholds, side="left")
-            pass_fraction = n_passing / n_bkg
-            rate_khz = pass_fraction * totalMinBiasRate()
+            rate_khz = n_passing / n_bkg * total
 
-            # Pick the threshold in a tolerance window around the target rate that is closest to the target
             idx = np.argmin(np.abs(rate_khz - target_rate))
             if np.abs(rate_khz[idx] - target_rate) > tolerance:
                 raise ValueError(f"Could not find a threshold achieving {target_rate} kHz within {tolerance} kHz. "
-                                f"Closest achievable rate is {rate_khz[idx]:.2f} kHz at threshold {thresholds[idx]:.4f}.")
-            np.savez(os.path.join(proc_path, f"rate_scan_wp_{score_name}_{int(target_rate)}.npz"), threshold=thresholds[idx], rate_khz=rate_khz[idx])
+                                 f"Closest achievable rate is {rate_khz[idx]:.2f} kHz at threshold {thresholds[idx]:.4f}.")
+            np.savez(os.path.join(proc_path, f"rate_scan_wp_nn_{score_name}_{int(target_rate)}.npz"),
+                     threshold=thresholds[idx], rate_khz=rate_khz[idx])
 
-        # ht wp
-        get_ht_wp(minbias_extras['central_jet_ht'], target_rate, tolerance, save_path)
+        # ---- NN OR HT seed ----
+        budget = target_rate - r_ht                    # kHz left for the NN after the seed
+        if budget <= 0:
+            print(f"Skipping OR at {target_rate} kHz: HT cut {ht_cut} alone gives {r_ht:.2f} kHz")
+        else:
+            k = int(round(budget / total * n_bkg))     # uncovered minbias events allowed through
+            for score_unc, score_name in zip(uncovered_scores, score_names):
+                if k >= len(score_unc):
+                    raise ValueError(f"OR budget of {budget:.2f} kHz exceeds the uncovered minbias sample")
+                thr = np.sort(score_unc)[::-1][k]      # accept score > thr
+                n_pass = np.count_nonzero(score_unc > thr)
+                rate = r_ht + n_pass / n_bkg * total   # total OR rate, denominator = ALL minbias
+                np.savez(os.path.join(proc_path, f"rate_scan_wp_nn_or_ht_{score_name}_{int(target_rate)}.npz"),
+                         threshold=thr, rate_khz=rate, r_ht_khz=r_ht, ht_cut=ht_cut)
 
-    return
+        # ---- HT only ----
+        get_ht_wp(ht, target_rate, tolerance, save_path)
 
 def get_ht_wp(jet_ht, target_rate_khz, tolerance, save_path):
     """
@@ -162,32 +162,42 @@ def turn_on_curve(signal_process, model, target_rates, x_variable, save_path):
     """
     proc_path = os.path.join(save_path, signal_process)
     os.makedirs(proc_path, exist_ok=True)
-    menu_seed = np.load(os.path.join(save_path, f"ht_menu_rate.npz"))
-    signal, *_, signal_extras = load_data([signal_process], model, percentage=100, test_ratio=0., extras=['genjets_pt', 'central_jet_ht'])
-    minbias, *_, minbias_extras = load_data(['MinBias'], model, percentage=100, test_ratio=0., extras=['central_jet_ht'])
+
+    # Load data
+    signal_path = os.path.join(model.output_directory, "testing_data")
+    signal_split = load_test_split([signal_process], signal_path)
+    signal, *_, signal_extras = load_data([signal_process], model, signal_split, "test", extras=['genjets_pt', 'central_jet_ht'])
+    minbias_path = os.path.join(model.output_directory, "testing_data")
+    minbias_split = load_test_split(['MinBias'], minbias_path)
+    minbias, *_, minbias_extras = load_data(['MinBias'], model, minbias_split, "test", extras=['central_jet_ht'])
     signal_gen_pt, signal_ht = signal_extras['genjets_pt'], signal_extras['central_jet_ht']
     minbias_ht = minbias_extras['central_jet_ht']
     signal_gen_ht = ak.sum(signal_gen_pt, axis=1)
+
+    menu_seed = np.load(os.path.join(save_path, f"ht_menu_rate.npz"))
     preds = model.event_model.predict(model.prepare_inputs(signal)[0])
     minbias_preds = model.event_model.predict(model.prepare_inputs(minbias)[0])
     scores, score_names = model.get_scores(preds, signal_process)
     minbias_scores, _ = model.get_scores(minbias_preds, signal_process)
     for rate in target_rates:
         for score, minbias_score, score_name in zip(scores, minbias_scores, score_names):
-            nn_wp = np.load(os.path.join(proc_path, f"rate_scan_wp_{score_name}_{int(rate)}.npz"))['threshold']
+            nn_wp = np.load(os.path.join(proc_path, f"rate_scan_wp_nn_{score_name}_{int(rate)}.npz"))['threshold']
+            if os.path.exists(os.path.join(proc_path, f"rate_scan_wp_nn_or_ht_{score_name}_{int(rate)}.npz")):
+                nn_ht_seed = np.load(os.path.join(proc_path, f"rate_scan_wp_nn_or_ht_{score_name}_{int(rate)}.npz"))
+                or_nn_cut, or_ht_cut = nn_ht_seed['threshold'], nn_ht_seed['ht_cut']
+            else:
+                or_nn_cut, or_ht_cut = 0, 0
             ht_wp = np.load(os.path.join(save_path,f"ht_scan_wp_{int(rate)}.npz"))['threshold']
             menu_ht = menu_seed['threshold']
             nn_passed = score > nn_wp
             ht_passed = signal_ht > ht_wp
-            or_passed = nn_passed.flatten() | ht_passed
-            menu_passed = signal_ht > menu_ht
-            or_rate = get_or_rate(minbias_score, minbias_ht, nn_wp, ht_wp)
-            menu_rate = menu_seed['rate_khz']
+            only_nn = nn_passed & ~ht_passed
+            or_passed = (score > or_nn_cut) | (signal_ht > or_ht_cut)
 
             nn_total_eff = np.mean(nn_passed)
             ht_total_eff = np.mean(ht_passed)
+            only_nn_total_eff = np.mean(only_nn)
             or_total_eff = np.mean(or_passed)
-            menu_total_eff = np.mean(menu_passed)
 
             bins, x_label = X_VARS[x_variable]
             bin_centers = 0.5 * (bins[1:] + bins[:-1])
@@ -195,10 +205,10 @@ def turn_on_curve(signal_process, model, target_rates, x_variable, save_path):
             nn_efficiency_err = np.zeros(len(bins) - 1)
             ht_efficiency = np.zeros(len(bins) - 1)
             ht_efficiency_err = np.zeros(len(bins) - 1)
+            only_nn_efficiency = np.zeros(len(bins) - 1)
+            only_nn_efficiency_err = np.zeros(len(bins) - 1)
             or_efficiency = np.zeros(len(bins) - 1)
             or_efficiency_err = np.zeros(len(bins) - 1)
-            menu_efficiency = np.zeros(len(bins) - 1)
-            menu_efficiency_err = np.zeros(len(bins) - 1)
             h, edges = np.histogram(signal_gen_ht, bins=bins)  # just to check binning
             h = h / np.sum(h)  # normalize to 1
 
@@ -207,18 +217,18 @@ def turn_on_curve(signal_process, model, target_rates, x_variable, save_path):
                 bin_mask = (signal_gen_ht >= bins[i]) & (signal_gen_ht < bins[i + 1])
                 nn_passed_in_bin = nn_passed[bin_mask]
                 ht_passed_in_bin = ht_passed[bin_mask]
+                only_nn_passed_in_bin = only_nn[bin_mask]
                 or_passed_in_bin = or_passed[bin_mask]
-                menu_passed_in_bin = menu_passed[bin_mask]
                 n_total = np.sum(bin_mask)
                 if n_total > 0:
                     nn_efficiency[i] = np.mean(nn_passed_in_bin)
                     nn_efficiency_err[i] = np.sqrt(nn_efficiency[i] * (1 - nn_efficiency[i]) / n_total)
                     ht_efficiency[i] = np.mean(ht_passed_in_bin)
                     ht_efficiency_err[i] = np.sqrt(ht_efficiency[i] * (1 - ht_efficiency[i]) / n_total)
+                    only_nn_efficiency[i] = np.mean(only_nn_passed_in_bin)
+                    only_nn_efficiency_err[i] = np.sqrt(only_nn_efficiency[i] * (1 - only_nn_efficiency[i]) / n_total)
                     or_efficiency[i] = np.mean(or_passed_in_bin)
                     or_efficiency_err[i] = np.sqrt(or_efficiency[i] * (1 - or_efficiency[i]) / n_total)
-                    menu_efficiency[i] = np.mean(menu_passed_in_bin)
-                    menu_efficiency_err[i] = np.sqrt(menu_efficiency[i] * (1 - menu_efficiency[i]) / n_total)
                 else:
                     continue
 
@@ -229,10 +239,11 @@ def turn_on_curve(signal_process, model, target_rates, x_variable, save_path):
                 label=f"$H_T$ @ {rate}kHz, $H_T$ = {ht_wp:.1f} GeV ($\int \epsilon$={ht_total_eff:.2f})")
             ax.errorbar(bin_centers, nn_efficiency, yerr=nn_efficiency_err, fmt="o-", capsize=3,
                 label=f"NN ({style.SCORE_LABEL_STYLE[score_name]}) @ {rate}kHz, nn score = {nn_wp:.3f} ($\int \epsilon$={nn_total_eff:.2f})")
-            ax.errorbar(bin_centers, or_efficiency, yerr=or_efficiency_err, fmt="^-", capsize=3,
-                label=f"NN | $H_T$ @ {or_rate:.1f}kHz ($\int \epsilon$={or_total_eff:.2f})")
-            ax.errorbar(bin_centers, menu_efficiency, yerr=menu_efficiency_err, fmt="x-", capsize=3,
-                label=f"Menu $H_T$ @ {menu_rate:.1f}kHz ($\int \epsilon$={menu_total_eff:.2f})")
+            ax.errorbar(bin_centers, only_nn_efficiency, yerr=only_nn_efficiency_err, fmt="D-", capsize=3,
+                label=f"NN only ({style.SCORE_LABEL_STYLE[score_name]}) @ {rate}kHz, nn score = {nn_wp:.3f} ($\int \epsilon$={only_nn_total_eff:.2f})")
+            if or_nn_cut > 0 and or_ht_cut > 0:
+                ax.errorbar(bin_centers, or_efficiency, yerr=or_efficiency_err, fmt="^-", capsize=3,
+                    label=f"NN ({or_nn_cut:.3f}) | $H_T$ ({or_ht_cut:.1f}) @ {rate}kHz ($\int \epsilon$={or_total_eff:.2f})")
             ax.bar(bin_centers, h, width=np.diff(bins), alpha=0.2, color="gray")
             ax.axhline(1.0, color="gray", lw=0.8, ls="--")
             ax.set_xlabel(f"Gen {x_label}")
@@ -252,6 +263,7 @@ if __name__ == "__main__":
     parser.add_argument("--signal", type=str, default="GGFHHTo4B")
     parser.add_argument("--model", default='tagger/output/ffbinary', help = 'Input model')
     parser.add_argument("--rates", nargs="+", default=[14, 30, 50], help="Rates to scan for working points (kHz)")
+    parser.add_argument("--ht-cut", type=float, default=450, help="HT cut for OR seed (GeV)")
 
     #Different modes
     parser.add_argument('--deriveWPs', action='store_true', help='derive the working points for di-taus')
@@ -265,7 +277,7 @@ if __name__ == "__main__":
     plot_dir = os.path.join(args.model, "plots/turn_on")
     os.makedirs(plot_dir, exist_ok=True)
     if args.deriveWPs:
-        find_working_points(model, args.signal, args.rates, plot_dir)
+        find_working_points(model, args.signal, args.ht_cut, args.rates, plot_dir)
 
     # plot turn-on curves
     if args.eff:

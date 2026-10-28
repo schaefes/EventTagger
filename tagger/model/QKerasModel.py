@@ -20,6 +20,7 @@ from qkeras.utils import load_qmodel
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 from tagger.model.common import choose_aggregator
+from tagger.model.losses import make_grouped_loss, make_hardneg_loss, penalty_cce
 from tagger.model.JetTagModel import JetModelFactory, JetTagModel
 
 class QKerasModel(JetTagModel):
@@ -36,6 +37,7 @@ class QKerasModel(JetTagModel):
 
     training_config_schema =    {"weight_method" : list,
                                  "validation_split" : And(float, lambda s: s > 0.0),
+                                 "ht_cut" : And(int, lambda s: s >= 0.0),
                                  "epochs" : And(int, lambda s: s >= 1),
                                  "batch_size" : And(int, lambda s: s >= 1),
                                  "learning_rate" : And(float, lambda s: s > 0.0),
@@ -45,7 +47,9 @@ class QKerasModel(JetTagModel):
                                  "ReduceLROnPlateau_factor" : And(float, lambda s: 1.0 >= s >= 0.0),
                                  "ReduceLROnPlateau_patience" : int,
                                  "ReduceLROnPlateau_min_lr" : And(float, lambda s: s >= 0.0),
-                                 "binary": bool}
+                                 "binary": bool,
+                                 "loss": str,
+                                 "lambda": And(float, lambda s: s >= 0.0),}
 
     inputs_config_schema = {"collections" : list,
                             "objects": dict,
@@ -110,7 +114,7 @@ class QKerasModel(JetTagModel):
         self.event_model.compile(
             optimizer='adam',
             loss={
-                self.loss_name + self.output_id_name: 'binary_crossentropy' if is_binary else 'categorical_crossentropy',
+                self.loss_name + self.output_id_name: self._get_loss(),
             },
             metrics={
                 self.loss_name + self.output_id_name: 'binary_accuracy' if is_binary else 'categorical_accuracy',
@@ -124,12 +128,11 @@ class QKerasModel(JetTagModel):
 
         data_dict = {}
         model_dict = {}
-        for i, f in enumerate(self.inputs_config['collections']):
-            data_dict[f"collection{i}_input"] = raw_dict[f]
+        for f in self.inputs_config['collections']:
+            data_dict[f"{f}_input"] = raw_dict[f]
 
         for m in self.inputs_config['masks']:
-            i = self.inputs_config['collections'].index(m)
-            model_dict[f'collection{i}_mask'] = get_input_mask(raw_dict[m])
+            model_dict[f'{m}_mask'] = get_input_mask(raw_dict[m])
 
         event_features = []
         for i in self.inputs_config['event_features']:
@@ -177,6 +180,35 @@ class QKerasModel(JetTagModel):
             callbacks=self.callbacks,
             shuffle=True,
         )
+
+    def _get_loss(self):
+        """Build the loss from the training config.
+
+        Config keys (under training_config):
+            loss (str): 'cce' (default) or 'grouped'
+            lambda (float): weight of the grouped BCE term, only for 'grouped'
+            loss_bkg_indices (list[int]): background class indices, only for 'grouped'
+        """
+        loss_type = self.training_config['loss']
+
+        if loss_type == 'cce':
+            return 'categorical_crossentropy'   # keep the Keras built-in for the baseline
+        if loss_type == 'bce':
+            return 'binary_crossentropy'
+        if loss_type == 'grouped':
+            return make_grouped_loss(
+                bkg_idx=self.class_labels['MinBias'],
+                lam=self.training_config['lambda'],
+            )
+        if loss_type == 'hardneg':
+            return make_hardneg_loss(
+                bkg_idx=self.class_labels['MinBias'],
+                boost = 2.0,
+                gamma = 2.0,
+            )
+        if loss_type == 'penalty_cce':
+            return penalty_cce()
+        raise ValueError(f"Unknown loss '{loss_type}', expected 'cce' or 'grouped'")
 
     # Decorated with save decorator for added functionality
     @JetTagModel.save_decorator

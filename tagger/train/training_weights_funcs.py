@@ -70,13 +70,15 @@ def kinematic_region(data, jet_ht, ht_cut, pt_cuts, labels, class_labels, model,
 
     return weights
 
-def flat_ht(data, labels, alpha=.5, max_w=20.0):
+def flat_ht(jet_ht, labels, alpha=.1, max_w=20.0):
     """Per-class H_T flattening with shared bins, tilt exponent and clipped weights."""
     bins = np.linspace(0, 1000, 51)
-    ht = np.clip(data['jet_ht'], bins[0], bins[-1] - 1e-6)
+    ht = np.clip(jet_ht, 0, 1000)
     idx = np.clip(np.digitize(ht, bins) - 1, 0, len(bins) - 2)
 
     weights = np.ones(len(ht))
+    if labels.ndim > 1 and labels.shape[-1] > 1:
+        labels = np.argmax(labels, axis=-1)
     for label in np.unique(labels):
         m = labels == label
         hist, _ = np.histogram(ht[m], bins=bins)
@@ -87,12 +89,40 @@ def flat_ht(data, labels, alpha=.5, max_w=20.0):
 
     return weights
 
+def hnm_weights(data, labels, model, top_frac=0.15, boost=5.0):
+    # ---- Weights for Hard negative mining traning round ----
+    minbias_idx = model.class_labels["MinBias"]  # adjust to your key / class index
+    y = labels.argmax(axis=1) if labels.ndim > 1 else labels
+    is_minbias = (y == minbias_idx)
+
+    hnm_cfg = dict(
+        n_rounds=1,
+        top_frac=0.01,   # fraction of minbias treated as "hard"
+        boost=5.0,       # extra weight on hard negatives
+    )
+
+    # Signal-likeness of each minbias event = 1 - P(minbias)
+    train_data, _ = model.prepare_inputs(data)
+    probs = model.event_model.predict(train_data)
+    sig_score = 1.0 - probs[:, minbias_idx]
+
+    mb_scores = sig_score[is_minbias]
+    thr = np.quantile(mb_scores, 1.0 - top_frac)
+    hard = is_minbias & (sig_score >= thr)
+
+    # Stack the boost on top of the existing weights
+    hnm_weights = np.ones(len(labels))
+    hnm_weights[hard] *= boost
+
+    return hnm_weights
+
 # Wrapper to call training functions, must enter all training funtions here
 # all function argumennts must be included in context dictionary passed to get_weights
 WEIGHT_FUNCTIONS = {
     "kinematic_region": kinematic_region,
     "effective_equal_classes": effective_equal_classes,
     "flat_ht": flat_ht,
+    "hnm_weights": hnm_weights,
 }
 
 def get_weights(name, **context):

@@ -81,7 +81,7 @@ train:
       PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
 
       EOS_MODEL_SUBDIR="${EOS_MODEL_DIR}/${Name}/${PROCESS_SUFFIX}"
-
+  - ls -la tagger/model/configs/
   - python tagger/train/train.py --train --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
   - python tagger/train/train.py --evaluate --model-config "${Model}.yaml" --model-name "${Name}" --processes "${PROCS[@]}"
 

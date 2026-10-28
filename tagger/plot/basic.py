@@ -19,7 +19,7 @@ import numpy as np
 import shap
 from sklearn.metrics import auc, roc_curve
 
-from tagger.data.tools import load_data, to_ML, totalMinBiasRate
+from tagger.data.tools import totalMinBiasRate
 from tagger.plot import style
 
 from .common import PT_BINS, plot_histo
@@ -62,6 +62,7 @@ def ROC_binary(y_pred, y_true, class_labels, save_path):
     # calculate ROC curve
     fpr, tpr, _ = roc_curve(y_true, y_pred)
     roc_auc = auc(fpr, tpr)
+    max_rate = 150
 
     # fpr to rate
     hep.cms.label(
@@ -70,7 +71,7 @@ def ROC_binary(y_pred, y_true, class_labels, save_path):
         fontsize=style.CMSHEADER_SIZE
     )
     fpr_rate = fpr * totalMinBiasRate()
-    rate_mask = fpr_rate < 200
+    rate_mask = fpr_rate < max_rate
     rate = fpr_rate[rate_mask]
     tpr_rate = tpr[rate_mask]
     fig, ax = plt.subplots(figsize=style.FIGURE_SIZE)
@@ -85,7 +86,7 @@ def ROC_binary(y_pred, y_true, class_labels, save_path):
     ax.grid()
 
     ax2.plot(rate, tpr_rate, color='cyan', lw=5, label='ROC curve (area = {:.2f})'.format(roc_auc))
-    ax2.set_xlim([0, 200])
+    ax2.set_xlim([0, max_rate])
     ax2.set_ylim([0.0, 1])
     ax2.set_xlabel('Rate (kHz)')
     ax2.set_ylabel('True Positive Rate')
@@ -129,6 +130,12 @@ def ROC_ovo(y_pred, y_test, class_labels, plot_dir, class_pair, signal_proc=None
     fpr, tpr, _ = roc_curve(y_true_binary, y_score_binary)
     roc_auc = auc(fpr, tpr)
 
+    fpr_rate = fpr * totalMinBiasRate()
+    max_rate = 150
+    rate_mask = fpr_rate < max_rate
+    rate = fpr_rate[rate_mask]
+    tpr_rate = tpr[rate_mask]
+
     # Plot the ROC curve
     fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.CMSHEADER_SIZE)
@@ -147,6 +154,28 @@ def ROC_ovo(y_pred, y_test, class_labels, plot_dir, class_pair, signal_proc=None
 
     # Save the plot
     save_path = os.path.join(save_dir, f"ROC_{class_pair[0]}_vs_{class_pair[1]}")
+    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+    plt.savefig(f"{save_path}.png", bbox_inches='tight')
+    plt.close()
+
+    # Plot the ROC curve with rate on the x-axis
+    fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.CMSHEADER_SIZE)
+    ax.plot(
+        rate,
+        tpr_rate,
+        label=f'{style.PROCESS_STYLE[class_pair[0]]} vs {style.PROCESS_STYLE[class_pair[1]]} (AUC = {roc_auc:.2f})',
+        color='blue',
+        linewidth=5,
+    )
+    ax.grid(True)
+    ax.set_xlabel('Mistag Rate (kHz)')
+    ax.set_ylabel('Signal Efficiency')
+    leg = ax.legend(loc='lower right', fontsize=style.SMALL_SIZE + 3, title=signal_proc)
+    leg._legend_box.align = "left"
+
+    # Save the plot
+    save_path = os.path.join(save_dir, f"ROC_{class_pair[0]}_vs_{class_pair[1]}_with_rate")
     plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
     plt.close()
@@ -429,6 +458,8 @@ def basic(model):
         # Generate all possible pairs of classes
         for i in model.class_labels.keys():
             for j in model.class_labels.keys():
+                if j != "MinBias":
+                    continue
                 if i != j:
                     class_pair = [i, j]
                     class_pairs.append(class_pair)

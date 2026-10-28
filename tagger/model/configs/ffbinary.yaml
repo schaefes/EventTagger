@@ -1,0 +1,63 @@
+model: FeedForwardBinaryModel
+run_config :
+  verbose : 2
+  debug : True
+  num_threads : 64
+
+model_config :
+  name : baseline
+  conv1d_layers : [10,10]
+  kernel_initializer : 'lecun_uniform'
+  aggregator : 'mean'
+
+quantization_config:
+  quantizer_bits : 9
+  quantizer_bits_int : 2
+  quantizer_alpha_val : 1.0
+
+training_config :
+  weight_method: ["effective_equal_classes"]
+  epochs : 100
+  batch_size : 1024
+  learning_rate : 0.001
+  validation_split : 0.1
+  ht_cut: 350
+
+  initial_sparsity : 0.0
+  final_sparsity : 0.1
+
+  EarlyStopping_patience : 10
+
+  ReduceLROnPlateau_factor : 0.5
+  ReduceLROnPlateau_patience : 5
+  ReduceLROnPlateau_min_lr : 0.00001
+
+  binary: True
+
+  loss: 'bce'
+  lambda: 0.
+
+inputs_config:
+  objects: {
+    "unifiedjets": [["pt", "eta", "phi", "bTagScore"], 4, 'unifiedjets'],
+    "sc8jets": [["pt", "eta", "phi", "mass"], 2, 'sc8jets'],
+    "jetpairs": [["mass"], 3, 'jetpairs'],
+    "tau": [["pt", "eta"], 1, 'tau'],
+    "electron": [["pt", "eta", "hwIso", "hwQual"], 1, 'electron'],
+    "photon": [["pt", "eta", "hwIso", "hwQual"], 1, 'photon'],
+    "muon": [["pt", "eta", "hwQual"], 1, 'muon']
+    }
+  collections: ["unifiedjets", "sc8jets", "jetpairs", "electron", "photon", "muon", "tau"]
+  masks: []
+  event_features: ["mjj", "max_mjj", "mee", "mmm", "mpp", "mtt", "met", "jet_ht", "delta_eta", "n_jets", "n_electrons",
+       "n_muons", "n_photons", "n_taus"]
+  combine: True
+
+firmware_config:
+  input_precision: 'ap_fixed<24,12,AP_RND,AP_SAT>'
+  output_precision: 'ap_ufixed<24,12,AP_RND,AP_SAT>'
+
+  clock_period : 2.5
+  fpga_part : 'xcvu13p-flga2577-2-e'
+
+  project_name: 'L1TSC4NGEventModel'

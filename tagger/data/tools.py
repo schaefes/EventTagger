@@ -12,6 +12,8 @@ import tensorflow as tf
 import uproot
 import yaml
 from tqdm import tqdm
+import zlib
+from collections import Counter
 
 # Dataset configuration
 from .config import EXTRA_FIELDS, FILTER_PATTERN, INPUT_TAG, N_PARTICLES
@@ -61,17 +63,71 @@ def to_ML(data, class_labels):
     return X, y, pt_target, truth_pt, reco_pt
 
 
-def load_data(processes, model, percentage=100, test_ratio=0.2, extras=[]):
+def split_raw(processes, model, test_ratio, seed=42, default_ratio=0.2):
     """
-    Load a specified percentage of the dataset using uproot.concatenate.
+    test_ratio: dict {process: ratio}, e.g. {"MinBias": 0.4, "VBF": 0.2}.
+                If it is not a dict, every process uses 0.2.
+                Processes missing from the dict use default_ratio.
 
-    Parameters:
-        processes (list): List of process names to load.
-        model (str): Model name to determine the input variables.
-        percentage (int): Percentage of the dataset to load (default is 100).
+    Returns {proc: {"train": {key: array}, "test": {key: array}}} with ALL arrays,
+    concatenated over the files of the process. Each split also has
+    "file_id" (index into DATASETS[proc]) and "event_id" (row in that file).
+    """
+    if not isinstance(test_ratio, dict):
+        test_ratio = {proc: 0.2 for proc in processes}
+
+    # a key known to be per-event, used to get the number of events
+    _, (first_names, _, first_obj) = next(iter(model.inputs_config['objects'].items()))
+    ref_key = f"{first_obj}_{first_names[0]}"
+
+    split = {"train": {}, "test": {}}
+    for proc in processes:
+        ratio = test_ratio.get(proc, default_ratio)
+        parts = {"train": {}, "test": {}}              # key -> list of arrays, one per file
+        static = {}                                     # non-event arrays, kept once
+
+        for i_file, path in enumerate(DATASETS[proc]):
+            p = np.load(os.path.join(path, "data.npz"))
+            n_events = len(p[ref_key])
+
+            # independent, reproducible seed per process and per file
+            rng = np.random.default_rng([seed, zlib.crc32(proc.encode()), i_file])
+            perm = rng.permutation(n_events)
+            n_test = int(round(ratio * n_events))
+            evs = {"test": np.sort(perm[:n_test]), "train": np.sort(perm[n_test:])}
+
+            for k in p.files:                          # one array in memory at a time
+                arr = p[k]
+                if arr.ndim >= 1 and arr.shape[0] == n_events:
+                    for name, ev in evs.items():
+                        parts[name].setdefault(k, []).append(arr[ev])
+                else:
+                    static.setdefault(k, arr)          # keep the first file's copy
+            for name, ev in evs.items():
+                parts[name].setdefault("event_id", []).append(ev)
+                parts[name].setdefault("file_id", []).append(np.full(len(ev), i_file))
+
+        for name in ("train", "test"):
+            split[name][proc] = {k: np.concatenate(v, axis=0) for k, v in parts[name].items()}
+            split[name][proc].update(static)
+    return split
+
+
+def load_test_split(processes, save_dir):
+    """
+    Load the files written by save_test_split into the structure load_data expects:
+    {"test": {proc: arrays}}.
+    """
+    return {"test": {proc: np.load(os.path.join(save_dir, f"{proc}_test.npz"))
+                     for proc in processes}}
+
+
+def load_data(processes, model, split, name, extras=[]):
+    """
+    Format one part (train or test) of the split returned by split_raw.
 
     Returns:
-        awkward.Array: Concatenated data arrays split for train and test.
+        data, labels, labels_dict (+ extra_fields if extras is non-empty)
     """
     processes = sorted(processes, key=lambda p: (p != "MinBias", p))
     label_map = {proc: i for i, proc in enumerate(processes)}
@@ -80,27 +136,27 @@ def load_data(processes, model, percentage=100, test_ratio=0.2, extras=[]):
     data_by_field = {f: [] for f in fields}
     labels = []
     extra_fields = {e: [] for e in extras} if extras else None
+
     for proc in processes:
-        proc_paths = DATASETS[proc]
-        for path in proc_paths:
-            p = np.load(os.path.join(path, "data.npz"))
-            for extra in extras:
-                extra_fields[extra].append(p[extra])
-            for k in model.inputs_config['objects']:
-                n_objects = model.inputs_config['objects'][k][1]
-                n_fields = len(model.inputs_config['objects'][k][0])
-                n_events = len(p[f"{k}_{model.inputs_config['objects'][k][0][0]}"])
-                loaded_object = np.empty((n_events, n_fields * n_objects))
-                for i, f in enumerate(model.inputs_config['objects'][k][0]):
-                    loaded_object[:, i::n_fields] = p[f"{k}_{f}"][:, :n_objects]
-                data_by_field[k].append(loaded_object.reshape(loaded_object.shape[0], n_objects, n_fields))
+        p = split[name][proc]
+        for extra in extras:
+            extra_fields[extra].append(p[extra])
+        for k in model.inputs_config['objects']:
+            n_objects = model.inputs_config['objects'][k][1]
+            coll_name = model.inputs_config['objects'][k][2]
+            n_fields = len(model.inputs_config['objects'][k][0])
+            n_events = len(p[f"{coll_name}_{model.inputs_config['objects'][k][0][0]}"])
+            loaded_object = np.empty((n_events, n_fields * n_objects))
+            for i, f in enumerate(model.inputs_config['objects'][k][0]):
+                loaded_object[:, i::n_fields] = p[f"{coll_name}_{f}"][:, :n_objects]
+            data_by_field[k].append(loaded_object.reshape(loaded_object.shape[0], n_objects, n_fields))
 
-            for f in model.inputs_config["event_features"]:
-                if f not in model.inputs_config['objects']:
-                    arr = p[f]
-                    data_by_field[f].append(arr)
+        for f in model.inputs_config["event_features"]:
+            if f not in model.inputs_config['objects']:
+                arr = p[f]
+                data_by_field[f].append(arr)
 
-            labels.append(np.full(n_events, label_map[proc]))
+        labels.append(np.full(n_events, label_map[proc]))
         labels_dict[proc] = label_map[proc]
 
     data = {f: np.concatenate(arrs, axis=0) for f, arrs in data_by_field.items()}
@@ -111,26 +167,18 @@ def load_data(processes, model, percentage=100, test_ratio=0.2, extras=[]):
     if len(processes) > 2:
         labels = np.eye(len(processes))[labels]
 
-    # Shuffle the data
-    n_total = len(labels)
-    rng = np.random.default_rng(seed=42)  # set a seed for reproducibility, or drop it
-    perm = rng.permutation(n_total)
-    data = {f: arr[perm] for f, arr in data.items()}
-    labels = labels[perm]
-    extra_fields = {e: arr[perm] for e, arr in extra_fields.items()} if extras else None
-
-    # split into train and test sets
-    split_idx = int((1 - test_ratio) * n_total)
-    train_data = {f: arr[:split_idx] for f, arr in data.items()}
-    test_data = {f: arr[split_idx:] for f, arr in data.items()}
-    extra_fields = {e: arr[:split_idx] for e, arr in extra_fields.items()} if extras else None
-    train_labels = labels[:split_idx]
-    test_labels = labels[split_idx:]
+    # Shuffle the training data only (the test order is kept)
+    if name == "train":
+        rng = np.random.default_rng(seed=42)
+        perm = rng.permutation(len(labels))
+        data = {f: arr[perm] for f, arr in data.items()}
+        labels = labels[perm]
+        extra_fields = {e: arr[perm] for e, arr in extra_fields.items()} if extras else None
 
     if extras:
-        return train_data, test_data, train_labels, test_labels, labels_dict, extra_fields
-    else:
-        return train_data, test_data, train_labels, test_labels, labels_dict
+        return data, labels, labels_dict, extra_fields
+    return data, labels, labels_dict
+
 
 def get_input_mask(jets_ds):
     n_features = 10

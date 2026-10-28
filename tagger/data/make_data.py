@@ -97,15 +97,14 @@ def make_pairs(jets):
 
     # Reconstructed parent
     parent = pairs.j1 + pairs.j2
-    score_fields = [f for f in jets.fields if "TagScore" in f]
     parent = ak.zip({
         "pt": parent.pt,
         "eta": parent.eta,
         "phi": parent.phi,
         "mass": parent.mass,
         "dR": pairs.j1.deltaR(pairs.j2),
-        **{f"j1_{f}": pairs.j1[f] for f in score_fields},
-        **{f"j2_{f}": pairs.j2[f] for f in score_fields},
+        **{f"j1_{f}": pairs.j1[f] for f in pairs.j1.fields},
+        **{f"j2_{f}": pairs.j2[f] for f in pairs.j2.fields},
     },
     behavior=vector.behavior,
     with_name="Momentum4D")
@@ -168,7 +167,7 @@ def main(data, save_path):
     save_dict.update(collection_field_arrays(unified, "unifiedjets", leading_phi, ["pt", "eta", "phi", "udsTagScore", "bTagScore",
         "cTagScore", "gTagScore", "tau_nTagScore", "tau_pTagScore", "eTagScore", "muTagScore"]))
     save_dict.update(collection_field_arrays(pairs, "jetpairs", leading_phi,
-        ["pt", "eta", "phi", "mass", "dR"] + [f"j1_{f}" for f in unified.fields if "TagScore" in f] + [f"j2_{f}" for f in unified.fields if "TagScore" in f]))
+        ["pt", "eta", "phi", "mass", "dR"] + [f"j1_{f}" for f in unified.fields] + [f"j2_{f}" for f in unified.fields]))
     save_dict.update(collection_field_arrays(genjets, "genjets", leading_phi, ["pt", "eta", "phi", "partonFlavour"]))
     save_dict.update(collection_field_arrays(sc8_jets, "sc8jets", leading_phi, ["pt", "eta", "phi", "mass"]))
     save_dict.update(collection_field_arrays(electrons, "electron", leading_phi, ["pt", "eta", "hwIso", "hwQual"]))

@@ -19,7 +19,7 @@ from tagger.model.QKerasModel import QKerasModel
 from qkeras import QConv1D
 from qkeras.qlayers import QActivation, QDense
 from qkeras.quantizers import quantized_bits, quantized_relu
-from tensorflow.keras.layers import Activation, BatchNormalization
+from tensorflow.keras.layers import Activation, BatchNormalization, Multiply, GlobalAveragePooling1D, Concatenate
 
 # Register the model in the factory with the string name corresponding to what is in the yaml config
 @JetModelFactory.register('DeepSetsMulticlassModel')
@@ -38,8 +38,6 @@ class DeepSetsMulticlassModel(QKerasModel):
                 "run_config" : JetTagModel.run_schema,
                 "model_config" : {"name" : str,
                                   "conv1d_layers" : list,
-                                  "classification_layers" : list,
-                                  "regression_layers" : list,
                                   "kernel_initializer" : str,
                                   "aggregator" : And(str, lambda s: s in  ["mean", "max", "attention"])},
                 "quantization_config" : QKerasModel.quantization_schema,
@@ -63,8 +61,6 @@ class DeepSetsMulticlassModel(QKerasModel):
 
         Additional hyperparameters in the config
             conv1d_layers: List of number of nodes for each layer of the conv1d layers.
-            classifier_layers: List of number of nodes for each layer of the classifier MLP.
-            regression_layers: List of number of nodes for each layer of the regression MLP
             aggregator: String that specifies the type of aggregator to use after the conv1D net.
         """
 
@@ -85,18 +81,18 @@ class DeepSetsMulticlassModel(QKerasModel):
         }
 
         # Inputs
-        inputs_jets = tf.keras.layers.Input(shape=input_shapes["jets_input"], name="jets_input")
+        inputs_jets = tf.keras.layers.Input(shape=input_shapes["collection0_input"], name="collection0_input")
         inputs_event_features = tf.keras.layers.Input(shape=input_shapes["event_features_input"], name="event_features_input")
-        inputs_jets_mask = tf.keras.layers.Input(shape=input_shapes["jets_mask"], name="jets_mask_input")
+        inputs_jets_mask = tf.keras.layers.Input(shape=input_shapes["collection0_mask"], name="collection0_mask")
 
         # Batch Norm
         main = BatchNormalization(name="norm_input")(inputs_jets)
         main_features = BatchNormalization(name="norm_features")(inputs_event_features)
 
-        main = QConv1D(filters=32, kernel_size=1, name="Conv1D_1", **self.common_args)(main)
+        main = QConv1D(filters=10, kernel_size=1, name="Conv1D_1", **self.common_args)(main)
         main = QActivation(activation=quantized_relu(9, 2), name="relu_1")(main)
 
-        main = QConv1D(filters=self.n_aggregation, kernel_size=1, name="Conv1D_3", **self.common_args)(main)
+        main = QConv1D(filters=10, kernel_size=1, name="Conv1D_3", **self.common_args)(main)
         main = QActivation(activation=quantized_relu(9, 2), name="relu_3")(main)
 
         main = QActivation(activation=quantized_bits(18,8), name="act_pool")(main)

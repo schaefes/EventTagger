@@ -30,8 +30,6 @@ class DeepSetModelHGQ(QKerasModel):
                 "run_config" : JetTagModel.run_schema,
                 "model_config" : {"name" : str,
                                   "conv1d_layers" : list,
-                                  "classification_layers" : list,
-                                  "regression_layers" : list,
                                   "beta": And(float, lambda s: 1.0 >= s >= 0.0),
                                   },
 

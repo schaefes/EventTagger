@@ -55,10 +55,10 @@ CLASS_LABEL_STYLE = {
 }
 
 PROCESS_STYLE = {
-        'GGFHHTo4B': r'gg $\rightarrow$ HH $\rightarrow$ 4b',
-        'GGFHHTo2B2Tau': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$',
+        'GGFHHTo4B': r'GGF $\rightarrow$ HH $\rightarrow$ 4b',
+        'GGFHHTo2B2Tau': r'GGF $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$',
         'VBFHtt': r'VBF $\rightarrow$ H $\rightarrow$ t$\bar{t}$',
-        'GGFHHTo2B2Tau': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$',
+        'GGFHHTo2B2Tau': r'GGF $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$',
         'MinBias': 'MinBias',
         'VBFHToBB': r"$VBF H \to b\bar{b}$",
         'VBFHToCC': r"$VBF H \to c\bar{c}$",
