@@ -1,0 +1,49 @@
+model: FeedForwardMulticlassModel
+run_config :
+  verbose : 2
+  debug : True
+  num_threads : 64
+
+model_config :
+  name : baseline
+  conv1d_layers : [10,10]
+  kernel_initializer : 'lecun_uniform'
+  aggregator : 'mean'
+
+quantization_config:
+  quantizer_bits : 9
+  quantizer_bits_int : 2
+  quantizer_alpha_val : 1.0
+
+training_config :
+  weight_method: ["effective_equal_classes"]
+  epochs : 100
+  batch_size : 1024
+  learning_rate : 0.001
+  validation_split : 0.1
+
+  initial_sparsity : 0.0
+  final_sparsity : 0.1
+
+  EarlyStopping_patience : 10
+
+  ReduceLROnPlateau_factor : 0.5
+  ReduceLROnPlateau_patience : 5
+  ReduceLROnPlateau_min_lr : 0.00001
+
+  binary: False
+
+inputs_config:
+  collections: {"sc4jets": [["pt", "eta", "phi", "btagScore"], 16]}
+  masks: []
+  event_features: ["jet_ht", "n_jets"]
+  combine: True
+
+firmware_config:
+  input_precision: 'ap_fixed<24,12,AP_RND,AP_SAT>'
+  output_precision: 'ap_ufixed<24,12,AP_RND,AP_SAT>'
+
+  clock_period : 2.5
+  fpga_part : 'xcvu13p-flga2577-2-e'
+
+  project_name: 'L1TSC4NGEventModel'
