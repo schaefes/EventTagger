@@ -5,7 +5,7 @@ stages:
   - data
   - train
   - test
-  - evaluate
+  # - evaluate
 
 variables:
     EOS_STORAGE_DIR: /eos/user/s/stella/EventTaggerCI/files
@@ -18,7 +18,6 @@ variables:
     - export PYTHONPATH=/builds/stella/EventTagger:$PYTHONPATH
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
     - export EOS_MGM_URL=root://eosuser.cern.ch
-    - env
   script:
     - python $FOLDER/$SCRIPT $ARGS
   tags: [cern-nextgen-gpu]
@@ -99,33 +98,33 @@ train:
       - .npy
     expire_in: 1 day
 
-evaluate:
-  extends:
-    - .template
-  stage: evaluate
-  tags: [cern-nextgen-h100]
-  script:
-  - export KRB5CCNAME=$(klist | egrep -o 'FILE:.*')
-  - source activate eventtagger
-  - |
-      IFS=',' read -ra PROCS <<< "${Train_processes// /}"
-      mapfile -t SORTED_PROCS < <(printf '%s\n' "${PROCS[@]}" | LC_ALL=C sort)
-      PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
-      echo "Model dir: output/${Name}/${PROCESS_SUFFIX}/"
-      for PROC in "${SORTED_PROCS[@]}"; do
-        if [[ "$PROC" != "MinBias" ]]; then
-          python tagger/plot/turn_on.py --deriveWPs \
-            --model "output/${Name}/${PROCESS_SUFFIX}/" \
-            --signal "$PROC" --ht-cut 350 || exit 1
-        fi
-      done
-  artifacts:
-    paths:
-      - output
-    when: always
-    exclude:
-      - .npy
-    expire_in: 7 days
+# evaluate:
+#   extends:
+#     - .template
+#   stage: evaluate
+#   tags: [cern-nextgen-h100]
+#   script:
+#   - export KRB5CCNAME=$(klist | egrep -o 'FILE:.*')
+#   - source activate eventtagger
+#   - |
+#       IFS=',' read -ra PROCS <<< "${Train_processes// /}"
+#       mapfile -t SORTED_PROCS < <(printf '%s\n' "${PROCS[@]}" | LC_ALL=C sort)
+#       PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
+#       echo "Model dir: output/${Name}/${PROCESS_SUFFIX}/"
+#       for PROC in "${SORTED_PROCS[@]}"; do
+#         if [[ "$PROC" != "MinBias" ]]; then
+#           python tagger/plot/turn_on.py --deriveWPs \
+#             --model "output/${Name}/${PROCESS_SUFFIX}/" \
+#             --signal "$PROC" --ht-cut 350 || exit 1
+#         fi
+#       done
+#   artifacts:
+#     paths:
+#       - output
+#     when: always
+#     exclude:
+#       - .npy
+#     expire_in: 7 days
 
 code_quality:
    tags:
