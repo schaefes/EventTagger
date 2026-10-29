@@ -33,10 +33,10 @@ data:
   variables:
     KUBERNETES_MEMORY_REQUEST: 32Gi
     KUBERNETES_CPU_REQUEST: 2
-  # rules:
-  #   - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
-  #       - tagger/data/**
-  #     when: manual
+  rules:
+    - changes:
+        - tagger/data/**
+      when: manual
   script:
   - source activate eventtagger
   - mkdir files
@@ -111,11 +111,14 @@ evaluate:
       mapfile -t SORTED_PROCS < <(printf '%s\n' "${PROCS[@]}" | LC_ALL=C sort)
       PROCESS_SUFFIX=$(IFS='_'; echo "${SORTED_PROCS[*]}")
       echo "Model dir: output/${Name}/${PROCESS_SUFFIX}/"
+      MODEL_DIR="output/${Name}/${PROCESS_SUFFIX}/"
       for PROC in "${SORTED_PROCS[@]}"; do
         if [[ "$PROC" != "MinBias" ]]; then
-          python tagger/plot/turn_on.py --deriveWPs \
-            --model "output/${Name}/${PROCESS_SUFFIX}/" \
-            --signal "$PROC" --ht-cut 350 || exit 1
+          for MODE in --deriveWPs --eff; do
+            python tagger/plot/turn_on.py "$MODE" \
+              --model "$MODEL_DIR" \
+              --signal "$PROC" --ht-cut 350 || exit 1
+          done
         fi
       done
   artifacts:
