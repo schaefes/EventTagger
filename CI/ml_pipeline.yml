@@ -4,8 +4,8 @@ include:
 stages:
   - data
   - train
-  - test
   - evaluate
+  - test
 
 variables:
     EOS_STORAGE_DIR: /eos/user/s/stella/EventTaggerCI/files
