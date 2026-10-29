@@ -103,6 +103,9 @@ evaluate:
     - .template
   stage: evaluate
   tags: [cern-nextgen-h100]
+  needs:
+    - job : train
+      optional: true
   script:
   - export KRB5CCNAME=$(klist | egrep -o 'FILE:.*')
   - source activate eventtagger
