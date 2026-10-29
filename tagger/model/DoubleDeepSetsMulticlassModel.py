@@ -81,45 +81,47 @@ class DoubleDeepSetsMulticlassModel(QKerasModel):
         }
 
         # Inputs
-        inputs_coll1 = tf.keras.layers.Input(shape=input_shapes["jets_input"], name="jets_input")
-        inputs_coll2 = tf.keras.layers.Input(shape=input_shapes["pairs_input"], name="pairs_input")
-        inputs_coll1_mask = tf.keras.layers.Input(shape=input_shapes["jets_mask"], name="jets_mask")
-        inputs_coll2_mask = tf.keras.layers.Input(shape=input_shapes["pairs_mask"], name="pairs_mask")
+        inputs_jets = tf.keras.layers.Input(shape=input_shapes["jets_input"], name="jets_input")
+        inputs_pairs = tf.keras.layers.Input(shape=input_shapes["pairs_input"], name="pairs_input")
+        inputs_jets_mask = tf.keras.layers.Input(shape=input_shapes["jets_mask"], name="jets_mask")
+        inputs_pairs_mask = tf.keras.layers.Input(shape=input_shapes["pairs_mask"], name="pairs_mask")
         inputs_event_features = tf.keras.layers.Input(shape=input_shapes["event_features_input"], name="event_features_input")
 
         # Batch Norm
-        main_1 = BatchNormalization(name="norm_input")(inputs_coll1)
-        main_2 = BatchNormalization(name="norm_input_2")(inputs_coll2)
+        main_1 = BatchNormalization(name="norm_input")(inputs_jets)
+        main_2 = BatchNormalization(name="norm_input_2")(inputs_pairs)
         main_features = BatchNormalization(name="norm_features")(inputs_event_features)
 
         # Conv1D layers
-        main_1 = QConv1D(filters=10, kernel_size=1, name="Conv1D_1_coll1", **self.common_args)(main_1)
-        main_1 = QActivation(activation=quantized_relu(9, 2), name="relu_1_coll1")(main_1)
+        main_1 = QConv1D(filters=10, kernel_size=1, name="Conv1D_1_jets", **self.common_args)(main_1)
+        main_1 = QActivation(activation=quantized_relu(9, 2), name="relu_1_jets")(main_1)
 
-        main_1 = QConv1D(filters=10, kernel_size=1, name="Conv1D_3_coll1", **self.common_args)(main_1)
-        main_1 = QActivation(activation=quantized_relu(9, 2), name="relu_3_coll1")(main_1)
+        main_1 = QConv1D(filters=10, kernel_size=1, name="Conv1D_3_jets", **self.common_args)(main_1)
+        main_1 = QActivation(activation=quantized_relu(9, 2), name="relu_3_jets")(main_1)
 
-        main_1 = QActivation(activation=quantized_bits(18,8), name="act_pool_coll1")(main_1)
+        main_1 = QActivation(activation=quantized_bits(18,8), name="act_pool_jets")(main_1)
 
         # Aggregation
-        main_1 = Multiply(name="multiply_mask_coll1")([main_1, inputs_coll1_mask])
-        main_1 = GlobalAveragePooling1D(name="avgpool_coll1")(main_1)
+        main_1 = Multiply(name="multiply_mask_jets")([main_1, inputs_jets_mask])
+        main_1 = GlobalAveragePooling1D(name="avgpool_jets")(main_1)
 
         # Conv1D layers
-        main_2 = QConv1D(filters=10, kernel_size=1, name="Conv1D_1_coll2", **self.common_args)(main_2)
-        main_2 = QActivation(activation=quantized_relu(9, 2), name="relu_1_coll2")(main_2)
+        main_2 = QConv1D(filters=10, kernel_size=1, name="Conv1D_1_pairs", **self.common_args)(main_2)
+        main_2 = QActivation(activation=quantized_relu(9, 2), name="relu_1_pairs")(main_2)
 
-        main_2 = QConv1D(filters=10, kernel_size=1, name="Conv1D_3_coll2", **self.common_args)(main_2)
-        main_2 = QActivation(activation=quantized_relu(9, 2), name="relu_3_coll2")(main_2)
+        main_2 = QConv1D(filters=10, kernel_size=1, name="Conv1D_3_pairs", **self.common_args)(main_2)
+        main_2 = QActivation(activation=quantized_relu(9, 2), name="relu_3_pairs")(main_2)
 
-        main_2 = QActivation(activation=quantized_bits(18,8), name="act_pool_coll2")(main_2)
+        main_2 = QActivation(activation=quantized_bits(18,8), name="act_pool_pairs")(main_2)
 
         # Aggregation
-        main_2 = Multiply(name="multiply_mask_coll2")([main_2, inputs_coll2_mask])
-        main_2 = GlobalAveragePooling1D(name="avgpool_coll2")(main_2)
+        main_2 = Multiply(name="multiply_mask_pairs")([main_2, inputs_pairs_mask])
+        main_2 = GlobalAveragePooling1D(name="avgpool_pairs")(main_2)
+
+        avgpools = Concatenate(name="concat_avgpools")([main_1, main_2])
 
         # FF + event features
-        event_id = Concatenate(name="concat")([main_1, main_2, main_features])
+        event_id = Concatenate(name="concat")([avgpools, main_features])
 
         event_id = QDense(64, name="Dense_1_jetID", **self.common_args)(event_id)
         event_id = QActivation( activation=quantized_relu(9, 2), name="relu_1_jetID")(event_id)
@@ -132,7 +134,7 @@ class DoubleDeepSetsMulticlassModel(QKerasModel):
         output = Activation("softmax", name="event_id_output")(event_id)
 
         # Define the model using both branches
-        self.event_model = tf.keras.Model(inputs=[inputs_coll1, inputs_coll2, inputs_event_features, inputs_coll1_mask, inputs_coll2_mask], outputs=output)
+        self.event_model = tf.keras.Model(inputs=[inputs_jets, inputs_pairs, inputs_event_features, inputs_jets_mask, inputs_pairs_mask], outputs=output)
 
         print(self.event_model.summary())
 
@@ -151,12 +153,21 @@ class DoubleDeepSetsMulticlassModel(QKerasModel):
         # Create default config
         config = hls4ml.utils.config_from_keras_model(self.event_model, granularity='name')
         config['IOType'] = 'io_parallel'
-        config['LayerName']['model_input']['Precision']['result'] = self.firmware_config['input_precision']
+        input_names = [inp.name for inp in self.event_model.inputs]
+        for l in input_names:
+            if 'input' in l:
+                config['LayerName'][l]['Precision']['result'] = self.firmware_config['input_precision']
+            elif 'mask' in l:
+                config['LayerName'][l]['Precision']['result'] = "ap_uint<1>"
+            else:
+                raise ValueError(f"Unknown input name {l} in model inputs. Please check the model inputs.")
 
         # Configuration for conv1d layers
         # hls4ml does not !!! automatically figure out the paralellization factor, this leads to csim, hdl sim errors
-        config['LayerName']['Conv1D_1']['ParallelizationFactor'] = 16
-        config['LayerName']['Conv1D_2']['ParallelizationFactor'] = 16
+        for layer in self.event_model.layers:
+            if isinstance(layer, QConv1D):
+                conv1d_type = layer.name.split('_')[-1]
+                config['LayerName'][layer.name]['ParallelizationFactor'] = self.inputs_config['objects'][conv1d_type][1]
 
         # Additional config
         for layer in self.event_model.layers:
@@ -167,7 +178,7 @@ class DoubleDeepSetsMulticlassModel(QKerasModel):
                 config["LayerName"][layer.name]["result"] = self.firmware_config['input_precision']
                 config["LayerName"][layer.name]["Trace"] = not build
 
-            elif layer_name in ["Permute", "Concatenate", "Flatten", "Reshape", "UpSampling1D", "Add"]:
+            elif layer_name in ["Permute", "Concatenate", "Flatten", "Reshape", "UpSampling1D", "Add", "Multiply"]:
                 print("Skipping trace for:", layer.name)
             else:
                 config["LayerName"][layer.name]["Trace"] = not build

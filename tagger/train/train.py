@@ -67,11 +67,11 @@ def train(model, model_path, processes):
     model.fit(train_inputs, train_labels, training_weights)
 
     # Hard negative mining weights and training
-    hnm_weights = np.ones(train_labels.shape[0])
-    for w in ["hnm_weights", "effective_equal_classes"]:
-        hnm_weights *= get_weights(w, **context)
-        context["region_weights"] = hnm_weights
-    model.fit(train_inputs, train_labels, hnm_weights)
+    # hnm_weights = np.ones(train_labels.shape[0])
+    # for w in ["hnm_weights", "effective_equal_classes"]:
+    #     hnm_weights *= get_weights(w, **context)
+    #     context["region_weights"] = hnm_weights
+    # model.fit(train_inputs, train_labels, hnm_weights)
 
     # Finished training, save model
     model.save()

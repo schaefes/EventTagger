@@ -102,7 +102,7 @@ evaluate:
   extends:
     - .template
   stage: evaluate
-  tags: [cern-nextgen-h100]
+  tags: [cern-nextgen-gpu]
   needs:
     - job : train
       optional: true
@@ -127,9 +127,8 @@ evaluate:
   artifacts:
     paths:
       - output
-    when: always
     exclude:
-      - .npy
+      - output/**/*.npy
     expire_in: 7 days
 
 code_quality:
