@@ -37,5 +37,5 @@ DeepSetDoubleMC:DSDoubleMC_2024Spring:
   extends: .ml_pipeline
   variables:
     Name: double_deepsets_mc
-    Model: dsbouble
+    Model: double_deepsets_mc
     Train_processes: "MinBias,GGFHHTo4B,GGFHHTo2B2Tau"
