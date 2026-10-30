@@ -44,7 +44,7 @@ inputs_config:
     "jetpairs": [["mass"], 3, 'jetpairs'],
     "muon": [["pt", "eta", "hwQual"], 1, 'muon']
     }
-  collections: ["unifiedjets", "sc8jets", "jetpairs", "muon"]
+  collections: ["jets", "sc8jets", "jetpairs", "muon"]
   masks: []
   event_features: ["met", "jet_ht"]
   combine: True

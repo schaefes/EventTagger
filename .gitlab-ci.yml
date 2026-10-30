@@ -26,9 +26,16 @@ include:
 # RUN_EMULATION = Switch to turn on the CMSSW emulator, need to have a working CMSSW emualtor for this. Has to run for rerun on tag. Tagged models need FW
 # RUN_SYNTHESIS = Switch to turn on the hls4ml and synthesis steps. Emulator needs synthesis to run
 
-DeepSet:baseline_5param_extended_trk:
+FFBinary:baseline_2024Spring:
   extends: .ml_pipeline
   variables:
     Name: ffbinary
     Model: ffbinary
     Train_processes: "MinBias,GGFHHTo4B"
+
+DeepSetDoubleMC:DSDoubleMC_2024Spring:
+  extends: .ml_pipeline
+  variables:
+    Name: double_deepsets_mc
+    Model: dsbouble
+    Train_processes: "MinBias,GGFHHTo4B,GGFHHTo2B2Tau"
