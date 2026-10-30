@@ -17,7 +17,7 @@ quantization_config:
 
 training_config :
   weight_method: ["effective_equal_classes"]
-  epochs : 2
+  epochs : 100
   batch_size : 1024
   learning_rate : 0.001
   validation_split : 0.1
@@ -39,18 +39,14 @@ training_config :
 
 inputs_config:
   objects: {
-    "unifiedjets": [["pt", "eta", "phi", "bTagScore"], 4, 'unifiedjets'],
+    "jets": [["pt", "eta", "phi", "bTagScore"], 4, 'sc4jets'],
     "sc8jets": [["pt", "eta", "phi", "mass"], 2, 'sc8jets'],
     "jetpairs": [["mass"], 3, 'jetpairs'],
-    "tau": [["pt", "eta"], 1, 'tau'],
-    "electron": [["pt", "eta", "hwIso", "hwQual"], 1, 'electron'],
-    "photon": [["pt", "eta", "hwIso", "hwQual"], 1, 'photon'],
     "muon": [["pt", "eta", "hwQual"], 1, 'muon']
     }
-  collections: ["unifiedjets", "sc8jets", "jetpairs", "electron", "photon", "muon", "tau"]
+  collections: ["unifiedjets", "sc8jets", "jetpairs", "muon"]
   masks: []
-  event_features: ["mjj", "max_mjj", "mee", "mmm", "mpp", "mtt", "met", "jet_ht", "delta_eta", "n_jets", "n_electrons",
-       "n_muons", "n_photons", "n_taus"]
+  event_features: ["met", "jet_ht"]
   combine: True
 
 firmware_config:
