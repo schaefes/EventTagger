@@ -39,7 +39,7 @@ training_config :
 
 inputs_config:
   objects: {
-    "jets": [["pt", "eta", "phi", "bTagScore"], 4, 'sc4jets'],
+    "jets": [["pt", "eta", "phi", "btagScore"], 4, 'sc4jets'],
     "sc8jets": [["pt", "eta", "phi", "mass"], 2, 'sc8jets'],
     "jetpairs": [["mass"], 3, 'jetpairs'],
     "muon": [["pt", "eta", "hwQual"], 1, 'muon']
