@@ -6,7 +6,7 @@ run_config :
 
 model_config :
   name : baseline_binary
-  conv1d_layers : [10, 10]
+  conv1d_layers : [15, 15, 15]
   kernel_initializer : 'lecun_uniform'
   aggregator : 'mean'
 
@@ -34,7 +34,7 @@ training_config:
 
   binary: False
 
-  loss: 'penalty_cce'
+  loss: 'focal'
   lambda: 0.
 
 inputs_config:

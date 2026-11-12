@@ -56,7 +56,7 @@ def train(model, model_path, processes):
         data=train_data, jet_ht=extras['central_jet_ht'], labels=train_labels, class_labels=labels_dict,
         ht_cut=350, pt_cuts=[np.inf, np.inf], signal_floor=0.9, minbias_floor=0.9,
         bkg_weights=8.0, region_weights=np.ones(train_labels.shape[0]),
-        model=model, alpha=0.1, max_w=20.0
+        model=model, alpha=0.3, max_w=20.0
     )
 
     # Training weights, function defined in training_weights.py

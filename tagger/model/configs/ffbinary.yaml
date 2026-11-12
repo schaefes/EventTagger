@@ -18,7 +18,7 @@ quantization_config:
 training_config :
   weight_method: ["effective_equal_classes"]
   epochs : 100
-  batch_size : 1024
+  batch_size : 2048
   learning_rate : 0.001
   validation_split : 0.1
   ht_cut: 350
@@ -34,17 +34,14 @@ training_config :
 
   binary: True
 
-  loss: 'bce'
+  loss: 'hard_negative_pairwise'
   lambda: 0.
 
 inputs_config:
   objects: {
     "jets": [["pt", "eta", "phi", "btagScore"], 4, 'sc4jets'],
-    "sc8jets": [["pt", "eta", "phi", "mass"], 2, 'sc8jets'],
-    "jetpairs": [["mass"], 3, 'jetpairs'],
-    "muon": [["pt", "eta", "hwQual"], 1, 'muon']
     }
-  collections: ["jets", "sc8jets", "jetpairs", "muon"]
+  collections: ["jets"]
   masks: []
   event_features: ["met", "jet_ht"]
   combine: True

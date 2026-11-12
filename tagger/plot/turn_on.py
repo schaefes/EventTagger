@@ -96,7 +96,7 @@ def get_ht_wp(jet_ht, target_rate_khz, tolerance, save_path):
     n_bkg = len(jet_ht)
 
     # Scan thresholds from min to max HT
-    thresholds = np.linspace(200, 800, 400)
+    thresholds = np.linspace(150, 800, 500)
 
     # For each threshold, fraction passing -> rate
     sorted_ht = np.sort(jet_ht)
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--signal", type=str, default="GGFHHTo4B")
     parser.add_argument("--model", default='tagger/output/ffbinary', help = 'Input model')
-    parser.add_argument("--rates", nargs="+", default=[14, 30, 50], help="Rates to scan for working points (kHz)")
+    parser.add_argument("--rates", nargs="+", default=[14, 30, 59.3], help="Rates to scan for working points (kHz)")
     parser.add_argument("--ht-cut", type=float, default=450, help="HT cut for OR seed (GeV)")
 
     #Different modes

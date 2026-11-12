@@ -91,7 +91,7 @@ class FeedForwardBinaryModel(QKerasModel):
         event_id = QDense(32, name="Dense_2_jetID", **self.common_args)(event_id)
         event_id = QActivation(activation=quantized_relu(9, 2), name="relu_2")(event_id)
 
-        event_id = QDense(output_shape, name="Dense_5_jetID", **self.common_args)(event_id)
+        event_id = QDense(output_shape, name="Dense_3_jetID", **self.common_args)(event_id)
 
         outputs = Activation("sigmoid", name="event_id_output")(event_id)
 

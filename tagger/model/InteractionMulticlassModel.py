@@ -119,7 +119,7 @@ class InteractionMulticlassModel(QKerasModel):
         main_features = BatchNormalization(name="norm_features")(inputs_event_features)
 
         # ---------------- All-jets branch (unchanged) ----------------
-        for i, n in enumerate(self.model_config.get('conv1d_layers', [10, 10])):
+        for i, n in enumerate(self.model_config.get('conv1d_layers', relation_layers)):
             main_1 = QConv1D(filters=n, kernel_size=1, name=f"Conv1D_{i}_coll1", **self.common_args)(main_1)
             main_1 = QActivation(activation=quantized_relu(9, 2), name=f"relu_{i}_coll1")(main_1)
 
@@ -170,7 +170,7 @@ class InteractionMulticlassModel(QKerasModel):
         # FF + event features
         event_id = Concatenate(name="concat")([main_1, objects, effects_pooled, main_features])
 
-        for i, n in enumerate(self.model_config.get('classifier_layers', [64, 32])):
+        for i, n in enumerate(self.model_config.get('classifier_layers', [64, 64, 32])):
             event_id = QDense(n, name=f"Dense_{i}_jetID", **self.common_args)(event_id)
             event_id = QActivation(activation=quantized_relu(9, 2), name=f"relu_{i}_jetID")(event_id)
 

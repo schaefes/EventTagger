@@ -181,12 +181,12 @@ def load_data(processes, model, split, name, extras=[]):
 
 
 def get_input_mask(jets_ds):
-    n_features = 10
+    n_features = 15
     input_mask = np.where(np.sum(jets_ds, axis=2) == 0, 0, 1)
     input_mask = np.repeat(input_mask[:, :,np.newaxis], n_features, axis=2)
 
     return input_mask
 
-def totalMinBiasRate(nCollBunch = 2808):
+def totalMinBiasRate(nCollBunch = 2500): # 2808
     LHCfreq = 11245.6 # in Hz
     return LHCfreq * nCollBunch / 1e3 # in kHz

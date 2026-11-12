@@ -19,7 +19,7 @@ import numpy as np
 import shap
 from sklearn.metrics import auc, roc_curve
 
-from tagger.data.tools import totalMinBiasRate
+from tagger.data.tools import load_data, load_test_split, totalMinBiasRate
 from tagger.plot import style
 
 from .common import PT_BINS, plot_histo
@@ -266,90 +266,126 @@ def confusion(y_pred, y_test, class_labels, plot_dir):
     plt.savefig(os.path.join(plot_dir, f"confusion_matrix.pdf"), bbox_inches='tight')
 
 
-def plot_input_vars(X_test, y_test, input_vars, class_labels, plot_dir):
+def _input_feature_arrays(inputs, model, labels, predictions=None):
+    configured_features = []
 
-    save_dir = os.path.join(plot_dir, 'inputs')
-    os.makedirs(save_dir, exist_ok=True)
-
-    is_filled = (X_test[:, :, 16] == 1)
-    for i in range(len(input_vars)):
-        inputs = []
-        labels = []
-        for iclass, class_label in enumerate(class_labels):
-            labels.append(style.INPUT_FEATURE_STYLE[input_vars[i]] + " " + style.PROCESS_STYLE[class_label])
-            # Filter by class (use [:,None] to ignore the candidate dimension) and by if is_filled is 1
-            # don't want all 0 inputs in our plots but also want to preserve real 0s in the plots
-            input_per_class = X_test[:, :, i][(y_test[:, iclass] == 1)[:,None] & is_filled ].flatten()
-            inputs.append(input_per_class)
-        plot_histo(
-            inputs,
-            labels,
-            '',
-            style.INPUT_FEATURE_STYLE[input_vars[i]],
-            'a.u',
-            log = 'log',
-            x_range=(np.min(X_test[:, :, i]), np.max(X_test[:, :, i])),
+    for object_name, (features, _, collection_name) in model.inputs_config["objects"].items():
+        input_name = next(
+            (name for name in (collection_name, object_name) if name in inputs),
+            None,
         )
-        save_path = os.path.join(save_dir, input_vars[i]+"_split")
-        plt.savefig(f"{save_path}.png", bbox_inches='tight')
-        plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
-        plt.close()
+        if input_name is None:
+            raise KeyError(
+                f"Input collection {collection_name!r} (or model input {object_name!r}) "
+                "is missing from the test data."
+            )
+        values = np.asarray(inputs[input_name])
+        if values.ndim != 3 or values.shape[2] != len(features):
+            raise ValueError(
+                f"Input collection {input_name!r} has shape {values.shape}; "
+                f"expected (events, objects, {len(features)})."
+            )
+        valid = np.any(np.abs(values) > 0, axis=2)
+        if "pt" in features:
+            valid = values[:, :, features.index("pt")] > 0
+        for object_index in range(values.shape[1]):
+            object_valid = valid[:, object_index]
+            for feature_index, feature_name in enumerate(features):
+                feature_predictions = (
+                    None if predictions is None else predictions[object_valid]
+                )
+                configured_features.append(
+                    (
+                        f"{collection_name}_{object_index + 1}_{feature_name}",
+                        values[object_valid, object_index, feature_index],
+                        labels[object_valid],
+                        feature_predictions,
+                    )
+                )
 
-    for i in range(len(input_vars)):
-        plot_histo(
-            [X_test[:, :, i][is_filled].flatten()],
-            [style.INPUT_FEATURE_STYLE[input_vars[i]]],
-            '',
-            style.INPUT_FEATURE_STYLE[input_vars[i]],
-            'a.u',
-            log = 'log',
-            x_range=(np.min(X_test[:, :, i]), np.max(X_test[:, :, i])),
+    for feature_name in model.inputs_config["event_features"]:
+        if feature_name not in inputs:
+            raise KeyError(f"Event feature {feature_name!r} is missing from the test data.")
+        values = np.asarray(inputs[feature_name]).reshape(len(labels), -1)
+        for component in range(values.shape[1]):
+            name = feature_name if values.shape[1] == 1 else f"{feature_name}_{component}"
+            configured_features.append((name, values[:, component], labels, predictions))
+    return configured_features
+
+
+def _classification_labels(labels, predictions, class_labels):
+    labels = np.asarray(labels)
+    predictions = np.asarray(predictions)
+    if labels.ndim > 1:
+        labels = labels.reshape(-1) if labels.shape[1] == 1 else np.argmax(labels, axis=1)
+    if predictions.ndim > 1:
+        predictions = predictions.reshape(-1) if predictions.shape[1] == 1 else np.argmax(predictions, axis=1)
+    if predictions.dtype.kind == "f":
+        binary_indices = sorted(class_labels.values())
+        if len(binary_indices) != 2:
+            raise ValueError("Floating-point predictions require exactly two classes.")
+        predictions = (predictions >= 0.5).astype(int)
+    return labels.astype(int), predictions.astype(int)
+
+
+def plot_input_features(inputs, model, class_labels, plot_dir, labels=None):
+    """Plot configured input-feature distributions, separated by class."""
+    plot_dir = os.path.join(plot_dir, "inputs")
+    os.makedirs(plot_dir, exist_ok=True)
+
+    if labels is None:
+        labels = np.zeros(len(next(iter(inputs.values()))), dtype=int)
+    labels = np.asarray(labels)
+    if labels.ndim > 1:
+        labels = labels.reshape(-1) if labels.shape[1] == 1 else np.argmax(labels, axis=1)
+    if labels.shape[0] != len(next(iter(inputs.values()))):
+        raise ValueError("Input arrays and labels contain different numbers of events.")
+
+    class_names = {int(index): name for name, index in class_labels.items()}
+    configured_features = _input_feature_arrays(inputs, model, labels)
+
+    for feature_name, values, feature_labels, _ in configured_features:
+        values = np.asarray(values, dtype=float)
+        feature_labels = np.asarray(feature_labels)
+        finite = np.isfinite(values)
+        values, feature_labels = values[finite], feature_labels[finite]
+        if values.size == 0:
+            continue
+        low, high = np.min(values), np.max(values)
+        if low == high:
+            delta = max(abs(low) * 0.05, 0.5)
+            low, high = low - delta, high + delta
+        bins = np.linspace(low, high, 51)
+
+        fig, ax = plt.subplots(figsize=style.FIGURE_SIZE)
+        for class_index in sorted(np.unique(feature_labels)):
+            selected = values[feature_labels == class_index]
+            if selected.size == 0:
+                continue
+            name = class_names.get(int(class_index), str(class_index))
+            label = style.PROCESS_STYLE.get(name, name)
+            ax.hist(
+                selected,
+                bins=bins,
+                weights=np.ones(selected.size) / selected.size,
+                histtype="step",
+                linewidth=style.LINEWIDTH,
+                label=label,
+            )
+        hep.cms.label(
+            llabel=style.CMSHEADER_LEFT,
+            rlabel=style.CMSHEADER_RIGHT,
+            ax=ax,
+            fontsize=style.CMSHEADER_SIZE,
         )
-        save_path = os.path.join(save_dir, input_vars[i])
-        plt.savefig(f"{save_path}.png", bbox_inches='tight')
-        plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
-        plt.close()
-
-    labels = ["Multiplicities:  " + style.PROCESS_STYLE[class_label] for class_label in class_labels]
-
-    multiplicities = {i : [] for i in range(len(class_labels)+1)}
-
-    for ibatch,batch in enumerate(X_test):
-        for iclass, class_label in enumerate(class_labels):
-            num_candidates = (batch[(y_test[ibatch, iclass] == 1) & (batch[:,16] != 0)]).shape[0]
-            if num_candidates > 0:
-                multiplicities[iclass].append(num_candidates)
-                multiplicities[len(class_labels)].append(num_candidates)
-
-    plot_histo(
-            [np.array(multiplicities[i]) for i in range(len(class_labels))],
-            labels,
-            '',
-            'multiplicities',
-            'a.u',
-            log = 'log',
-            x_range=(0,16),
-            bins=17
-    )
-    save_path = os.path.join(save_dir, 'multiplicies_split')
-    plt.savefig(f"{save_path}.png", bbox_inches='tight')
-    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
-    plt.close()
-
-    plot_histo(
-            [np.array(multiplicities[len(class_labels)])],
-            ['Multiplicity'],
-            '',
-            'Multiplicity',
-            'a.u',
-            log = 'log',
-            x_range=(0,16),
-            bins=17
-    )
-    save_path = os.path.join(save_dir, 'multiplicity')
-    plt.savefig(f"{save_path}.png", bbox_inches='tight')
-    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
-    plt.close()
+        ax.set_xlabel(feature_name)
+        ax.set_ylabel("Normalised events")
+        ax.legend(loc="best")
+        fig.tight_layout()
+        output = os.path.join(plot_dir, f"input_{feature_name}")
+        fig.savefig(output + ".png", bbox_inches="tight")
+        fig.savefig(output + ".pdf", bbox_inches="tight")
+        plt.close(fig)
 
 
 def shapPlot(shap_values, feature_names, class_names):
@@ -444,7 +480,6 @@ def basic(model):
     testing_data = np.load(f"{model.output_directory}/testing_data/test_data.npz")
     X_test = {k: testing_data[k] for k in testing_data.files}
     y_test = np.load(f"{model.output_directory}/testing_data/test_labels.npz")['labels']
-
     y_pred = model.event_model.predict(X_test)
 
     # Plot ROC curves
@@ -471,8 +506,18 @@ def basic(model):
         ROC_binary(y_pred, y_test, inverted_labels, plot_dir)
 
 
+    # The saved test_data.npz contains model-prepared inputs (for combined
+    # models this is only ``model_input``), so reload raw collections for plots.
+    processes = [
+        name for name, _ in sorted(model.class_labels.items(), key=lambda item: item[1])
+    ]
+    test_split = load_test_split(
+        processes, os.path.join(model.output_directory, "testing_data")
+    )
+    raw_test_data, raw_labels, _ = load_data(processes, model, test_split, "test")
+
     # Plot input distributions
-    # plot_input_vars(X_test, y_test, model.input_vars, model.class_labels, plot_dir)
+    plot_input_features(raw_test_data, model, model.class_labels, plot_dir, raw_labels)
 
     # Plot the shaply feature importance
     # plot_shaply(model, X_test, model.class_labels, model.input_vars, plot_dir)

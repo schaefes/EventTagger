@@ -21,6 +21,7 @@ training_config :
   batch_size : 1024
   learning_rate : 0.001
   validation_split : 0.1
+  ht_cut: 350
 
   initial_sparsity : 0.0
   final_sparsity : 0.1
@@ -33,10 +34,19 @@ training_config :
 
   binary: False
 
+  loss: 'penalty_cce'
+  lambda: 0.
+
 inputs_config:
-  collections: {"sc4jets": [["pt", "eta", "phi", "btagScore"], 16]}
+  objects: {
+    "jets": [["pt", "eta", "phi", "btagScore"], 4, 'sc4jets'],
+    "sc8jets": [["pt", "eta", "phi", "mass"], 2, 'sc8jets'],
+    "jetpairs": [["mass"], 3, 'jetpairs'],
+    "muon": [["pt", "eta", "hwQual"], 1, 'muon']
+    }
+  collections: ["jets", "sc8jets", "jetpairs", "muon"]
   masks: []
-  event_features: ["jet_ht", "n_jets"]
+  event_features: ["met", "jet_ht"]
   combine: True
 
 firmware_config:

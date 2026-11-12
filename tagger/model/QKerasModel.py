@@ -5,6 +5,7 @@ Written 29/09/2025 cebrown@cern.ch
 
 import json
 import os
+import pickle
 
 import hls4ml
 import numpy as np
@@ -20,7 +21,15 @@ from qkeras.utils import load_qmodel
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 from tagger.model.common import choose_aggregator
-from tagger.model.losses import make_grouped_loss, make_hardneg_loss, penalty_cce
+from tagger.model.losses import (
+    make_grouped_loss,
+    make_hardneg_loss,
+    # make_hard_negative_pairwise_loss,
+    penalty_cce,
+    make_fixed_cut_loss,
+    make_focal_loss,
+    make_loss_and_metrics,
+)
 from tagger.model.JetTagModel import JetModelFactory, JetTagModel
 
 class QKerasModel(JetTagModel):
@@ -49,7 +58,18 @@ class QKerasModel(JetTagModel):
                                  "ReduceLROnPlateau_min_lr" : And(float, lambda s: s >= 0.0),
                                  "binary": bool,
                                  "loss": str,
-                                 "lambda": And(float, lambda s: s >= 0.0),}
+                                 "lambda": And(float, lambda s: s >= 0.0),
+                                 Optional("fixed_cut_threshold"): And(float, lambda s: 0.0 < s < 1.0),
+                                 Optional("fixed_cut_margin"): And(float, lambda s: 0.0 <= s < 0.5),
+                                 Optional("fixed_cut_signal_weight"): And(float, lambda s: s >= 0.0),
+                                 Optional("fixed_cut_background_weight"): And(float, lambda s: s >= 0.0),
+                                 Optional("fixed_cut_bce_weight"): And(float, lambda s: s >= 0.0),
+                                 Optional("pairwise_threshold"): And(float, lambda s: 0.0 < s < 1.0),
+                                 Optional("pairwise_margin"): And(float, lambda s: s >= 0.0),
+                                 Optional("pairwise_weight"): And(float, lambda s: s >= 0.0),
+                                 Optional("pairwise_bce_weight"): And(float, lambda s: s >= 0.0),
+                                 Optional("pairwise_hardness_scale"): And(float, lambda s: s > 0.0),
+                                 Optional("pairwise_debug_print"): bool,}
 
     inputs_config_schema = {"collections" : list,
                             "objects": dict,
@@ -74,10 +94,10 @@ class QKerasModel(JetTagModel):
         # Define the pruned model
         pruning_params = {
             'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(
-                initial_sparsity=self.training_config['initial_sparsity'],
-                final_sparsity=self.training_config['final_sparsity'],
+                initial_sparsity=float(self.training_config['initial_sparsity']),
+                final_sparsity=float(self.training_config['final_sparsity']),
                 begin_step=0,
-                end_step=end_step,
+                end_step=int(end_step),
             )
         }
         self.event_model = tfmot.sparsity.keras.prune_low_magnitude(self.event_model, **pruning_params)
@@ -110,17 +130,19 @@ class QKerasModel(JetTagModel):
             self._prune_model(num_samples)
 
         # compile the tensorflow model setting the loss and metrics
+        use_loss, loss_metrics = self._get_loss()
         is_binary = self.training_config["binary"]
+        accuracy = 'binary_accuracy' if is_binary else 'categorical_accuracy'
+        output_name = self.loss_name + self.output_id_name
+
         self.event_model.compile(
             optimizer='adam',
-            loss={
-                self.loss_name + self.output_id_name: self._get_loss(),
-            },
+            loss={output_name: use_loss},
             metrics={
-                self.loss_name + self.output_id_name: 'binary_accuracy' if is_binary else 'categorical_accuracy',
+                output_name: [accuracy, loss_metrics[0], loss_metrics[1]],
             },
             weighted_metrics={
-                self.loss_name + self.output_id_name: 'binary_accuracy' if is_binary else 'categorical_accuracy',
+                output_name: accuracy,
             },
         )
 
@@ -208,6 +230,29 @@ class QKerasModel(JetTagModel):
             )
         if loss_type == 'penalty_cce':
             return penalty_cce()
+        if loss_type == 'fixed_cut':
+            return make_fixed_cut_loss(
+                threshold=self.training_config.get('fixed_cut_threshold', 0.8),
+                margin=self.training_config.get('fixed_cut_margin', 0.05),
+                a_sig=self.training_config.get('fixed_cut_signal_weight', 1.0),
+                b_bkg=self.training_config.get('fixed_cut_background_weight', 5.0),
+                bce_weight=self.training_config.get('fixed_cut_bce_weight', 1.0),
+            )
+        if loss_type == 'hard_negative_pairwise':
+            return make_loss_and_metrics(
+                threshold=self.training_config.get('pairwise_threshold', 0.8),
+                margin=self.training_config.get('pairwise_margin', 0.05),
+                pair_weight=self.training_config.get('pairwise_weight', 50.0),
+                bce_weight=self.training_config.get('pairwise_bce_weight', 1.0),
+                hardness_scale=self.training_config.get('pairwise_hardness_scale', 0.1),
+            )
+        if loss_type == 'focal':
+            return make_focal_loss(
+                gamma=2.,
+                alpha=None,   # not 0. -- 0 means "weight every class by zero"
+                penalty_matrix=[[0, 17, 17], [0, 0, 0], [0, 0, 0]],
+            )
+
         raise ValueError(f"Unknown loss '{loss_type}', expected 'cce' or 'grouped'")
 
     # Decorated with save decorator for added functionality
@@ -226,6 +271,11 @@ class QKerasModel(JetTagModel):
         export_path = os.path.join(out_dir, "model/saved_model.keras")
         model_export.save(export_path)
         print(f"Model saved to {export_path}")
+
+        pickle_path = os.path.join(out_dir, "model/saved_model.pkl")
+        with open(pickle_path, "wb") as pickle_file:
+            pickle.dump(model_export, pickle_file, protocol=pickle.HIGHEST_PROTOCOL)
+        print(f"Model saved to {pickle_path}")
 
     @JetTagModel.load_decorator
     def load(self, out_dir: str = "None"):
@@ -259,4 +309,3 @@ class QKerasModel(JetTagModel):
             return [ovo_score, total_signal], ["ovo_score", "total_signal"]
         else:
             return [preds.flatten()], ["raw"]
-

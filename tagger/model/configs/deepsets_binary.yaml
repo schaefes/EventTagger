@@ -35,10 +35,10 @@ training_config:
   binary: True
 
 inputs_config:
-  objects: {"unifiedjets": [["pt", "eta", "phi", "bTagScore"], 16]}
+  objects: {"unifiedjets": [["pt", "eta", "phi", "bTagScore"], 4]}
   collections: [unifiedjets]
   masks: [unifiedjets]
-  event_features: ["central_jet_ht", "n_jets"]
+  event_features: ["jet_ht", "met"]
   combine: False
 
 firmware_config:

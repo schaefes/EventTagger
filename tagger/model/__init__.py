@@ -6,4 +6,5 @@ from tagger.model.DeepSetsMulticlassModel import DeepSetsMulticlassModel
 from tagger.model.DoubleDeepSetsBinaryModel import DoubleDeepSetsBinaryModel
 from tagger.model.DoubleDeepSetsMulticlassModel import DoubleDeepSetsMulticlassModel
 from tagger.model.InteractionMulticlassModel import InteractionMulticlassModel
+from tagger.model.TransformerMulticlassModel import TransformerMulticlassModel
 from tagger.model.QKerasModel import QKerasModel
