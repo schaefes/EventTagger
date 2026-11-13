@@ -181,7 +181,7 @@ def load_data(processes, model, split, name, extras=[]):
 
 
 def get_input_mask(jets_ds):
-    n_features = 15
+    n_features = 10
     input_mask = np.where(np.sum(jets_ds, axis=2) == 0, 0, 1)
     input_mask = np.repeat(input_mask[:, :,np.newaxis], n_features, axis=2)
 

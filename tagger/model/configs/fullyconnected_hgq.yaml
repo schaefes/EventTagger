@@ -1,0 +1,42 @@
+model: FullyConnectedModelHGQ
+run_config :
+  verbose : 2
+  debug : True
+  num_threads : 24
+
+model_config :
+  name : baseline_HGQ2
+  conv1d_layers : [10,10]
+  conv1d_parallelisation_factor : [16,16]
+  classification_layers : [32,16]
+  classification_parallelisation_factor : [32,16]
+  beta: 1.1e-10
+
+training_config :
+  weight_method: ["effective_equal_classes"]
+  epochs : 5
+  batch_size : 1024
+  learning_rate : 0.001
+  validation_split : 0.1
+  target_ebops : 300000
+  binary: True
+  loss: 'bce'
+
+inputs_config:
+  objects: {
+    "jets": [["pt", "eta", "phi", "btagScore"], 4, 'sc4jets'],
+    }
+  collections: ["jets"]
+  masks: []
+  event_features: ["met", "jet_ht"]
+  combine: True
+
+firmware_config:
+  input_precision: 'ap_fixed<24,12,AP_RND,AP_SAT>'
+  output_precision: 'ap_ufixed<24,12,AP_RND,AP_SAT>'
+
+  clock_period : 2.5
+  fpga_part : 'xcvu13p-flga2577-2-e'
+
+  project_name: 'L1TSC4NGEventModel'
+

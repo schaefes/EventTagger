@@ -50,7 +50,7 @@ def train(model, model_path, processes):
     # Train it with a pruned model
     num_samples = train_labels.shape[0] * (1 - model.training_config['validation_split'])
 
-    model.compile_model(num_samples)
+    model.compile_model(num_samples, model.training_config['target_ebops'])
 
     context = dict(
         data=train_data, jet_ht=extras['central_jet_ht'], labels=train_labels, class_labels=labels_dict,
